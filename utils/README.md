@@ -48,9 +48,11 @@ ChatNomina/
 ## ⚡ Requisitos
 
 - Python 3.8+
-- CUDA-compatible GPU (recomendado para mejor rendimiento)
-- Cuenta Microsoft 365 con acceso a SharePoint
-- Aplicación registrada en Azure con permisos para Microsoft Graph API
+- 8GB+ RAM (recomendado para mejor rendimiento)
+- Conexión a internet para búsquedas web
+- Acceso a SharePoint (para funcionalidades de documentos)
+
+> **Nota**: Las utilidades están optimizadas para funcionar en CPU. El rendimiento puede variar según la capacidad de procesamiento disponible.
 
 ## ✨ Instalación
 

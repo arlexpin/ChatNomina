@@ -4,21 +4,18 @@
 
 Esta guía proporciona información detallada para desarrolladores que deseen contribuir o extender ChatNomina. Incluye instrucciones de configuración, arquitectura, mejores prácticas y flujos de trabajo.
 
-## Requisitos del Sistema
+## Requisitos de Desarrollo
 
-### Hardware Recomendado
-- CPU: 4+ núcleos
-- RAM: 16GB+
-- Almacenamiento: 50GB+ SSD
-- GPU: NVIDIA CUDA compatible (opcional, para entrenamiento)
+### Hardware
+- CPU: Procesador de 4+ núcleos (recomendado)
+- RAM: 8GB+ (recomendado)
+- Almacenamiento: 10GB+ de espacio libre
 
-### Software Requerido
+### Software
 - Python 3.8+
-- Node.js 16+
 - Git
-- Docker
-- PostgreSQL 13+
-- Redis 6+
+- Editor de código (VS Code recomendado)
+- Navegador web moderno
 
 ### Herramientas de Desarrollo
 - VS Code / PyCharm
@@ -848,3 +845,16 @@ except RuntimeError as e:
 - Email: dev@chatnomina.com
 - Slack: #dev-chatnomina
 - GitHub: @chatnomina/dev 
+
+## Solución de Problemas Comunes
+
+### Problemas de Rendimiento
+- Si experimentas lentitud en las respuestas, considera aumentar la RAM disponible
+- Para mejorar el rendimiento, puedes ajustar los parámetros de batch_size en la configuración
+- En caso de problemas de memoria, reduce el tamaño de los lotes de procesamiento
+
+## Optimización
+- Utiliza el modo de procesamiento por lotes para mejorar el rendimiento
+- Ajusta el tamaño de los lotes según la memoria disponible
+- Considera usar caché para respuestas frecuentes
+- Implementa compresión de modelos para reducir el uso de memoria 
