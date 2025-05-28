@@ -1,10 +1,10 @@
 # ChatNomina
 
-ChatNomina es un asistente conversacional inteligente para consultas relacionadas con la nómina, desarrollado como una aplicación web utilizando NiceGUI. El sistema integra modelos de lenguaje avanzados (T5 y BERT) con acceso a SharePoint para proporcionar respuestas precisas sobre información de nómina, normativa laboral y documentación institucional.
+ChatNomina es un asistente conversacional inteligente para consultas relacionadas con la nómina, desarrollado como una aplicación de escritorio nativa utilizando NiceGUI. El sistema integra modelos de lenguaje avanzados (T5 y BERT) con acceso a SharePoint para proporcionar respuestas precisas sobre información de nómina, normativa laboral y documentación institucional.
 
 ## 💡 Características principales
 
-- **Interfaz Web Moderna**: Aplicación web interactiva construida con NiceGUI
+- **Interfaz Nativa**: Aplicación de escritorio con ventana nativa
 - **Autenticación Segura**: Integración con Microsoft Entra ID (MSAL)
 - **Acceso a SharePoint**: Consulta de archivos institucionales (.txt y .docx)
 - **Modelos de IA Avanzados**:
@@ -57,12 +57,13 @@ ChatNomina/
 ## ✨ Instalación
 
 1. Clona el repositorio:
+
    ```bash
    git clone [URL_DEL_REPOSITORIO]
    cd ChatNomina
    ```
-
 2. Crea y activa un entorno virtual:
+
    ```bash
    python -m venv venv
    # Windows
@@ -70,13 +71,13 @@ ChatNomina/
    # Linux/macOS
    source venv/bin/activate
    ```
-
 3. Instala las dependencias:
+
    ```bash
    pip install -r utils/requirements.txt
    ```
-
 4. Configura las variables de entorno:
+
    ```bash
    # .env
    TENANT_ID=tu_tenant_id
@@ -89,19 +90,20 @@ ChatNomina/
 ## 🚀 Ejecución
 
 1. Inicia la aplicación:
+
    ```bash
    python app.py
    ```
-
-2. Abre tu navegador en `http://localhost:8080`
-
+2. Se abrirá una ventana nativa de ChatNomina
 3. Autentícate con tu cuenta Microsoft 365
-
 4. Ingresa tu número de documento para comenzar a hacer consultas
+
+> **Nota**: La aplicación se ejecuta como una ventana nativa de escritorio, lo que proporciona una mejor experiencia de usuario y mayor seguridad al mantener los datos localmente.
 
 ## 🔧 Funcionalidades Disponibles
 
 ### Consultas de Nómina
+
 - Cálculo de días de vacaciones pendientes
 - Consulta de última consignación
 - Información de sueldo actual
@@ -110,11 +112,13 @@ ChatNomina/
 - Total acumulado pagado
 
 ### Documentación y Normativa
+
 - Búsqueda en documentos institucionales
 - Consulta de normativa laboral
 - FAQ sobre procesos de nómina
 
 ### Características Adicionales
+
 - Sistema de feedback para mejorar respuestas
 - Logging detallado de operaciones
 - Caché de documentos para mejor rendimiento
@@ -123,6 +127,7 @@ ChatNomina/
 ## 🛠️ Desarrollo
 
 ### Estructura de Código
+
 - `app.py`: Contiene la clase principal `ChatNominaApp` y la lógica de la interfaz
 - `utils/`: Módulos de utilidad para diferentes funcionalidades
 - `modelo_finetuneado/`: Modelos de IA entrenados
@@ -130,7 +135,9 @@ ChatNomina/
 - `sharepoint/`: Integración con SharePoint
 
 ### Extensión
+
 El proyecto puede ser extendido:
+
 1. Agregando nuevas transformaciones en `utils/transforms.py`
 2. Implementando nuevos modelos en `modelo_finetuneado/`
 3. Extendiendo la interfaz en `app.py`
@@ -165,6 +172,7 @@ Este proyecto fue desarrollado como trabajo de grado para la Maestría en Cienci
 ## 📞 Soporte
 
 Para reportar problemas o sugerir mejoras, por favor:
+
 1. Revisa los issues existentes
 2. Crea un nuevo issue con una descripción detallada
 3. Incluye logs relevantes si es un problema de funcionamiento

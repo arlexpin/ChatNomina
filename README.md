@@ -35,7 +35,7 @@ ChatNomina/
 ├── sharepoint/       # Integración con SharePoint
 ├── data/            # Datos y recursos
 ├── auth/           # Autenticación y autorización
-└── docs/          # Documentación detallada
+└── docs/          # Documentación detallada (Anexos del trabajo de grado)
 ```
 
 ## Requisitos
@@ -139,6 +139,6 @@ Arlex Pino - apino@icesi.edu.co
 ## Agradecimientos
 
 - Universidad Icesi
-- Departamento de Ciencias de la Computación
-- Profesores y asesores del proyecto
+- Maestría en Ciencias de Datos
+- Profesores y asesores del proyecto en especial a mi tutor Uram Anibal Sosa
 - Equipo de desarrollo y colaboradores

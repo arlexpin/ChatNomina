@@ -843,9 +843,9 @@ except RuntimeError as e:
 
 ### 3. Contacto
 
-- Email: dev@chatnomina.com
+- Email: apino@icesi.edu.co
 - Slack: #dev-chatnomina
-- GitHub: @chatnomina/dev 
+- GitHub: @arlexpin
 
 ## Solución de Problemas Comunes
 
