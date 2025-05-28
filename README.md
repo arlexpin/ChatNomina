@@ -40,9 +40,11 @@ ChatNomina/
 ## Requisitos
 
 - Python 3.8+
-- CUDA (opcional, para aceleración GPU)
+- 8GB+ RAM (recomendado para mejor rendimiento)
 - Acceso a SharePoint
 - Credenciales de Azure AD
+
+> **Nota sobre rendimiento**: El sistema está optimizado para funcionar en CPU. Aunque el rendimiento puede ser más lento que en GPU, el sistema está diseñado para funcionar eficientemente en entornos sin aceleración por hardware.
 
 ## Instalación
 
