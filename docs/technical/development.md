@@ -2,7 +2,7 @@
 
 ## Visión General
 
-Esta guía proporciona información detallada para desarrolladores que deseen contribuir o extender ChatNomina. Incluye instrucciones de configuración, arquitectura, mejores prácticas y flujos de trabajo.
+Esta guía proporciona información detallada para desarrolladores que deseen contribuir o extender ChatNomina. Incluye instrucciones de configuración, mejores prácticas y flujos de trabajo.
 
 ## Requisitos de Desarrollo
 
@@ -140,64 +140,6 @@ chatnomina/
 └── README.md
 ```
 
-## Arquitectura
-
-### Diagrama de Componentes
-
-```mermaid
-graph TD
-    subgraph Desktop App
-        A[Native Window] --> B[UI Components]
-        B --> C[Event Handler]
-    end
-
-    subgraph Backend
-        C --> D[Auth Service]
-        C --> E[Chat Service]
-        C --> F[Payroll Service]
-        C --> G[User Service]
-    end
-
-    subgraph Models
-        E --> H[Intent Model]
-        E --> I[Entity Model]
-        E --> J[Response Model]
-    end
-
-    subgraph Data
-        D --> K[(PostgreSQL)]
-        E --> K
-        F --> K
-        G --> K
-        E --> L[(Redis)]
-        H --> M[(Model Storage)]
-        I --> M
-        J --> M
-    end
-```
-
-### Flujo de Datos
-
-```mermaid
-sequenceDiagram
-    participant U as Usuario
-    participant W as Ventana Nativa
-    participant S as Chat Service
-    participant M as Models
-    participant D as Database
-    participant R as Redis
-
-    U->>W: Ingresa mensaje
-    W->>S: Procesar mensaje
-    S->>M: Clasificar intención
-    S->>M: Extraer entidades
-    S->>D: Consultar datos
-    S->>R: Cachear contexto
-    S->>M: Generar respuesta
-    S->>W: Actualizar UI
-    W->>U: Mostrar respuesta
-```
-
 ## Desarrollo
 
 ### 1. Estilo de Código
@@ -225,7 +167,7 @@ class ChatNominaApp:
         """Inicializa la aplicación nativa."""
         self.window_size = (450, 750)
         self.setup_ui()
-      
+    
     def setup_ui(self):
         """Configura la interfaz de usuario nativa."""
         ui.page('/')(self.main_page)
@@ -371,22 +313,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-    
+  
       - name: Set up Python
         uses: actions/setup-python@v2
         with:
           python-version: '3.8'
-        
+      
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install -r requirements-dev.txt
-        
+      
       - name: Run tests
         run: |
           pytest tests/
-        
+      
       - name: Run linting
         run: |
           flake8 app/
@@ -425,7 +367,7 @@ services:
     depends_on:
       - db
       - redis
-    
+  
   db:
     image: postgres:13
     environment:
@@ -434,12 +376,12 @@ services:
       - POSTGRES_DB=chatnomina
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    
+  
   redis:
     image: redis:6
     volumes:
       - redis_data:/data
-    
+  
 volumes:
   postgres_data:
   redis_data:
@@ -558,7 +500,7 @@ def create_access_token(
         expire = datetime.utcnow() + expires_delta
     else:
         expire = datetime.utcnow() + timedelta(minutes=15)
-      
+    
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(
         to_encode,
@@ -659,7 +601,7 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
-      
+    
   db:
     image: postgres:13
     restart: always
@@ -674,7 +616,7 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
-      
+    
   redis:
     image: redis:6
     restart: always
@@ -685,7 +627,7 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
-      
+    
 volumes:
   postgres_data:
   redis_data:
