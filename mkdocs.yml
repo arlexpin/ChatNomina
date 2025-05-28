@@ -1,7 +1,7 @@
 site_name: ChatNomina Documentation
 site_description: Documentación del Sistema de Chat Inteligente para Consultas de Nómina
 site_author: Universidad Icesi
-repo_url: https://github.com/yourusername/ChatNomina
+repo_url: https://github.com/arlexpin/ChatNomina
 repo_name: ChatNomina
 
 theme:
@@ -78,7 +78,7 @@ nav:
 extra:
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/yourusername/ChatNomina
+      link: https://github.com/arlexpin/ChatNomina
     - icon: fontawesome/brands/python
       link: https://pypi.org/project/chatnomina/
     - icon: fontawesome/solid/globe

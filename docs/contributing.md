@@ -33,12 +33,14 @@ Gracias por tu interés en contribuir a ChatNomina. Este documento proporciona l
 ### 1. Antes de Contribuir
 
 #### Requisitos
+
 - Cuenta de GitHub
 - Git instalado
 - Entorno de desarrollo configurado
 - Conocimiento básico de Python/JavaScript
 
 #### Preparación
+
 1. Fork del repositorio
 2. Clone local
 3. Configurar upstream
@@ -46,11 +48,11 @@ Gracias por tu interés en contribuir a ChatNomina. Este documento proporciona l
 
 ```bash
 # Fork y clone
-git clone https://github.com/your-username/chatnomina.git
-cd chatnomina
+git clone https://github.com/arlexpin/ChatNomina.git
+cd ChatNomina
 
 # Configurar upstream
-git remote add upstream https://github.com/original-org/chatnomina.git
+git remote add upstream https://github.com/arlexpin/ChatNomina.git
 
 # Crear rama
 git checkout -b feature/your-feature
@@ -61,6 +63,7 @@ git checkout -b feature/your-feature
 #### Estilo de Código
 
 ##### Python
+
 - PEP 8
 - Docstrings (Google Style)
 - Type hints
@@ -86,6 +89,7 @@ def process_message(message: str) -> Dict[str, Any]:
 ```
 
 ##### JavaScript/TypeScript
+
 - ESLint
 - Prettier
 - JSDoc
@@ -110,6 +114,7 @@ async function processMessage(message: string): Promise<Response> {
 #### Commits
 
 ##### Formato
+
 ```
 <tipo>(<alcance>): <descripción>
 
@@ -119,6 +124,7 @@ async function processMessage(message: string): Promise<Response> {
 ```
 
 ##### Tipos
+
 - `feat`: Nueva característica
 - `fix`: Corrección de bug
 - `docs`: Documentación
@@ -128,6 +134,7 @@ async function processMessage(message: string): Promise<Response> {
 - `chore`: Mantenimiento
 
 ##### Ejemplos
+
 ```
 feat(auth): implementa autenticación OAuth2
 
@@ -151,6 +158,7 @@ Fixes #456
 ### 3. Pull Requests
 
 #### Proceso
+
 1. Actualizar fork
 2. Crear rama
 3. Desarrollar cambios
@@ -182,6 +190,7 @@ git push origin feature/your-feature
 ```
 
 #### Template
+
 ```markdown
 ## Descripción
 
@@ -215,6 +224,7 @@ git push origin feature/your-feature
 ### 4. Revisión de Código
 
 #### Checklist
+
 - [ ] Código sigue estándares
 - [ ] Tests pasan
 - [ ] Documentación actualizada
@@ -225,6 +235,7 @@ git push origin feature/your-feature
 - [ ] Rendimiento optimizado
 
 #### Proceso
+
 1. Revisión automática
 2. Revisión por pares
 3. Comentarios
@@ -237,6 +248,7 @@ git push origin feature/your-feature
 ### 1. Configuración
 
 #### Backend
+
 ```bash
 # Crear entorno virtual
 python -m venv venv
@@ -253,6 +265,7 @@ nano .env
 ```
 
 #### Frontend
+
 ```bash
 # Instalar dependencias
 cd frontend
@@ -266,6 +279,7 @@ nano .env
 ### 2. Desarrollo
 
 #### Backend
+
 ```bash
 # Ejecutar servidor
 uvicorn app.main:app --reload
@@ -280,6 +294,7 @@ mypy .
 ```
 
 #### Frontend
+
 ```bash
 # Ejecutar servidor
 npm run dev
@@ -352,30 +367,33 @@ print(response)
 
 ## Parámetros
 
-| Parámetro | Tipo | Descripción |
-|-----------|------|-------------|
-| message | str | Mensaje a procesar |
-| context | dict | Contexto adicional |
+| Parámetro | Tipo | Descripción       |
+| ---------- | ---- | ------------------ |
+| message    | str  | Mensaje a procesar |
+| context    | dict | Contexto adicional |
 
 ## Retornos
 
-| Tipo | Descripción |
-|------|-------------|
+| Tipo | Descripción        |
+| ---- | ------------------- |
 | dict | Respuesta procesada |
 
 ## Ejemplos
 
 ### Ejemplo 1
+
 ```python
 response = client.send_message("¿Cuál es mi sueldo?")
 # {'response': 'Tu sueldo es $3,000,000', 'confidence': 0.95}
 ```
 
 ### Ejemplo 2
+
 ```python
 response = client.send_message("¿Cuántos días de vacaciones me quedan?")
 # {'response': 'Te quedan 15 días de vacaciones', 'confidence': 0.98}
 ```
+
 ```
 
 ## Soporte
@@ -449,4 +467,4 @@ response = client.send_message("¿Cuántos días de vacaciones me quedan?")
 - 🌟 Contribuidor
 - 🌟🌟 Colaborador
 - 🌟🌟🌟 Mantenedor
-- 🌟🌟🌟🌟 Sponsor 
+- 🌟🌟🌟🌟 Sponsor

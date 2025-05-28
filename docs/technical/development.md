@@ -7,17 +7,20 @@ Esta guía proporciona información detallada para desarrolladores que deseen co
 ## Requisitos de Desarrollo
 
 ### Hardware
+
 - CPU: Procesador de 4+ núcleos (recomendado)
 - RAM: 8GB+ (recomendado)
 - Almacenamiento: 10GB+ de espacio libre
 
 ### Software
+
 - Python 3.8+
 - Git
 - Editor de código (VS Code recomendado)
 - Navegador web moderno
 
 ### Herramientas de Desarrollo
+
 - VS Code / PyCharm
 - Postman / Insomnia
 - DBeaver / pgAdmin
@@ -29,8 +32,8 @@ Esta guía proporciona información detallada para desarrolladores que deseen co
 ### 1. Clonar el Repositorio
 
 ```bash
-git clone https://github.com/empresa/chatnomina.git
-cd chatnomina
+git clone https://github.com/arlexpin/ChatNomina.git
+cd ChatNomina
 ```
 
 ### 2. Configurar Entorno Virtual
@@ -200,6 +203,7 @@ sequenceDiagram
 ### 1. Estilo de Código
 
 #### Python
+
 - PEP 8
 - Docstrings (Google style)
 - Type hints
@@ -212,16 +216,16 @@ from nicegui import ui
 
 class ChatNominaApp:
     """Aplicación nativa de chat para consultas de nómina.
-    
+  
     Esta clase maneja la interfaz de usuario nativa y la lógica
     de procesamiento de mensajes.
     """
-    
+  
     def __init__(self):
         """Inicializa la aplicación nativa."""
         self.window_size = (450, 750)
         self.setup_ui()
-        
+      
     def setup_ui(self):
         """Configura la interfaz de usuario nativa."""
         ui.page('/')(self.main_page)
@@ -233,6 +237,7 @@ class ChatNominaApp:
 ```
 
 #### JavaScript/TypeScript
+
 - ESLint
 - Prettier
 - JSDoc
@@ -271,6 +276,7 @@ async function processMessage(
 ### 2. Testing
 
 #### Unit Tests
+
 ```python
 # tests/unit/test_chat.py
 import pytest
@@ -279,7 +285,7 @@ from app.services.chat import ChatService
 def test_process_message():
     """Test procesamiento de mensaje."""
     service = ChatService()
-    
+  
     # Test caso válido
     response = service.process_message(
         "¿Cuál es mi sueldo?",
@@ -287,13 +293,14 @@ def test_process_message():
     )
     assert response["confidence"] > 0.9
     assert "$" in response["text"]
-    
+  
     # Test caso inválido
     with pytest.raises(ValueError):
         service.process_message("", {"user_id": "123"})
 ```
 
 #### Integration Tests
+
 ```python
 # tests/integration/test_api.py
 import pytest
@@ -317,6 +324,7 @@ def test_chat_endpoint():
 ```
 
 #### E2E Tests
+
 ```python
 # tests/e2e/test_workflow.py
 import pytest
@@ -327,26 +335,27 @@ def test_chat_workflow():
     """Test flujo completo de chat."""
     driver = webdriver.Chrome()
     driver.get("http://localhost:3000")
-    
+  
     # Login
     driver.find_element(By.ID, "email").send_keys("test@example.com")
     driver.find_element(By.ID, "password").send_keys("password")
     driver.find_element(By.ID, "login").click()
-    
+  
     # Chat
     driver.find_element(By.ID, "message").send_keys("¿Cuál es mi sueldo?")
     driver.find_element(By.ID, "send").click()
-    
+  
     # Verificar respuesta
     response = driver.find_element(By.CLASS_NAME, "response")
     assert "$" in response.text
-    
+  
     driver.quit()
 ```
 
 ### 3. CI/CD
 
 #### GitHub Actions
+
 ```yaml
 # .github/workflows/ci.yml
 name: CI
@@ -362,22 +371,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      
+    
       - name: Set up Python
         uses: actions/setup-python@v2
         with:
           python-version: '3.8'
-          
+        
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install -r requirements-dev.txt
-          
+        
       - name: Run tests
         run: |
           pytest tests/
-          
+        
       - name: Run linting
         run: |
           flake8 app/
@@ -386,6 +395,7 @@ jobs:
 ```
 
 #### Docker
+
 ```dockerfile
 # Dockerfile
 FROM python:3.8-slim
@@ -415,7 +425,7 @@ services:
     depends_on:
       - db
       - redis
-      
+    
   db:
     image: postgres:13
     environment:
@@ -424,12 +434,12 @@ services:
       - POSTGRES_DB=chatnomina
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      
+    
   redis:
     image: redis:6
     volumes:
       - redis_data:/data
-      
+    
 volumes:
   postgres_data:
   redis_data:
@@ -438,6 +448,7 @@ volumes:
 ### 4. Monitoreo
 
 #### Logging
+
 ```python
 # app/core/logging.py
 import logging
@@ -448,11 +459,11 @@ def setup_logging():
     """Configura el sistema de logging para la aplicación nativa."""
     logger = logging.getLogger("chatnomina")
     logger.setLevel(logging.INFO)
-    
+  
     # Directorio de logs en la carpeta de la aplicación
     log_dir = Path.home() / "ChatNomina" / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
-    
+  
     # Handler para archivo
     file_handler = RotatingFileHandler(
         log_dir / "app.log",
@@ -465,18 +476,19 @@ def setup_logging():
         )
     )
     logger.addHandler(file_handler)
-    
+  
     # Handler para consola (ventana nativa)
     console_handler = logging.StreamHandler()
     console_handler.setFormatter(
         logging.Formatter("%(levelname)s: %(message)s")
     )
     logger.addHandler(console_handler)
-    
+  
     return logger
 ```
 
 #### Métricas
+
 ```python
 # app/core/metrics.py
 from prometheus_client import Counter, Histogram
@@ -505,26 +517,27 @@ MODEL_LATENCY = Histogram(
 @app.middleware("http")
 async def metrics_middleware(request: Request, call_next):
     start_time = time.time()
-    
+  
     response = await call_next(request)
-    
+  
     # Registrar métricas
     REQUEST_COUNT.labels(
         endpoint=request.url.path,
         method=request.method,
         status=response.status_code
     ).inc()
-    
+  
     REQUEST_LATENCY.labels(
         endpoint=request.url.path
     ).observe(time.time() - start_time)
-    
+  
     return response
 ```
 
 ### 5. Seguridad
 
 #### Autenticación
+
 ```python
 # app/core/security.py
 from datetime import datetime, timedelta
@@ -540,23 +553,24 @@ def create_access_token(
 ) -> str:
     """Crea un token JWT."""
     to_encode = data.copy()
-    
+  
     if expires_delta:
         expire = datetime.utcnow() + expires_delta
     else:
         expire = datetime.utcnow() + timedelta(minutes=15)
-        
+      
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(
         to_encode,
         SECRET_KEY,
         algorithm=ALGORITHM
     )
-    
+  
     return encoded_jwt
 ```
 
 #### Validación
+
 ```python
 # app/utils/validation.py
 from pydantic import BaseModel, validator
@@ -566,14 +580,14 @@ class MessageRequest(BaseModel):
     """Modelo de validación para mensajes."""
     message: str
     context: Optional[dict] = None
-    
+  
     @validator("message")
     def message_not_empty(cls, v):
         """Valida que el mensaje no esté vacío."""
         if not v.strip():
             raise ValueError("El mensaje no puede estar vacío")
         return v
-    
+  
     @validator("context")
     def validate_context(cls, v):
         """Valida el contexto."""
@@ -585,6 +599,7 @@ class MessageRequest(BaseModel):
 ### 6. Despliegue
 
 #### Script de Despliegue
+
 ```bash
 #!/bin/bash
 # scripts/deploy.sh
@@ -619,6 +634,7 @@ echo "Despliegue exitoso: $APP_NAME:$VERSION en $ENVIRONMENT"
 ```
 
 #### Configuración de Producción
+
 ```yaml
 # docker-compose.prod.yml
 version: '3.8'
@@ -643,7 +659,7 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
-        
+      
   db:
     image: postgres:13
     restart: always
@@ -658,7 +674,7 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
-        
+      
   redis:
     image: redis:6
     restart: always
@@ -669,7 +685,7 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
-        
+      
 volumes:
   postgres_data:
   redis_data:
@@ -722,6 +738,7 @@ volumes:
 ### 1. Logs
 
 #### Niveles de Log
+
 - DEBUG: Información detallada
 - INFO: Confirmación de operaciones
 - WARNING: Situaciones inesperadas
@@ -729,6 +746,7 @@ volumes:
 - CRITICAL: Errores críticos
 
 #### Formato
+
 ```
 2024-03-15 12:00:00,123 - chatnomina - INFO - Mensaje procesado
 2024-03-15 12:00:00,124 - chatnomina - ERROR - Error en procesamiento
@@ -737,17 +755,20 @@ volumes:
 ### 2. Errores Comunes
 
 #### Database
+
 - Connection refused
 - Timeout
 - Deadlock
 - Constraint violation
 
 #### Redis
+
 - Connection refused
 - Memory limit
 - Key expiration
 
 #### Models
+
 - CUDA out of memory
 - Model not found
 - Invalid input
@@ -756,6 +777,7 @@ volumes:
 ### 3. Soluciones
 
 #### Database
+
 ```python
 # Reintentar conexión
 from tenacity import retry, stop_after_attempt, wait_exponential
@@ -770,6 +792,7 @@ def get_db_connection():
 ```
 
 #### Redis
+
 ```python
 # Manejar errores de Redis
 from redis.exceptions import RedisError
@@ -783,6 +806,7 @@ except RedisError as e:
 ```
 
 #### Models
+
 ```python
 # Manejar errores de modelos
 try:
@@ -818,7 +842,7 @@ except RuntimeError as e:
 ### 3. Comunidad
 
 - [Stack Overflow](https://stackoverflow.com/)
-- [GitHub Issues](https://github.com/empresa/chatnomina/issues)
+- [GitHub Issues](https://github.com/arlexpin/ChatNomina/issues)
 - [Discord](https://discord.gg/chatnomina)
 - [Blog](https://blog.chatnomina.com/)
 
@@ -850,18 +874,21 @@ except RuntimeError as e:
 ## Solución de Problemas Comunes
 
 ### Problemas de Interfaz
+
 - Si la ventana no se abre, verifica que no haya otra instancia ejecutándose
 - Para problemas de rendimiento en la interfaz, asegúrate de tener los drivers gráficos actualizados
 - Si la ventana se cierra inesperadamente, revisa los logs en la carpeta de la aplicación
 
 ### Problemas de Rendimiento
+
 - Si experimentas lentitud en las respuestas, considera aumentar la RAM disponible
 - Para mejorar el rendimiento, puedes ajustar los parámetros de batch_size en la configuración
 - En caso de problemas de memoria, reduce el tamaño de los lotes de procesamiento
 
 ## Optimización
+
 - Utiliza el modo de procesamiento por lotes para mejorar el rendimiento
 - Ajusta el tamaño de los lotes según la memoria disponible
 - Considera usar caché para respuestas frecuentes
 - Implementa compresión de modelos para reducir el uso de memoria
-- Optimiza el renderizado de la interfaz nativa para mejor rendimiento 
+- Optimiza el renderizado de la interfaz nativa para mejor rendimiento
