@@ -19,6 +19,7 @@ ChatNomina es un sistema de chat inteligente desarrollado como parte del Proyect
 - 🔐 Autenticación segura con Microsoft Azure AD
 - 📈 Dashboard de métricas y uso del sistema
 - 🔄 Pipeline de CI/CD automatizado
+- 🖥️ Interfaz nativa de escritorio (no web)
 
 ## Estructura del Proyecto
 
@@ -87,9 +88,12 @@ FOLDER_PATH=your_folder_path
 python app.py
 ```
 
-2. Abrir el navegador en `http://localhost:8080`
+2. Se abrirá una ventana nativa de ChatNomina
 3. Autenticarse con las credenciales de Microsoft
-4. Comenzar a realizar consultas sobre nómina
+4. Ingresar el número de documento
+5. Comenzar a realizar consultas sobre nómina
+
+> **Nota**: La aplicación se ejecuta como una ventana nativa de escritorio, no como una aplicación web. Esto proporciona una mejor experiencia de usuario y mayor seguridad al mantener los datos localmente.
 
 ## Ejemplos de Consultas
 
