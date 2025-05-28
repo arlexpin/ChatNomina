@@ -107,12 +107,10 @@ python app.py
 La documentación detallada se encuentra en el directorio `docs/`:
 
 - [Guía de Usuario](docs/user_guide/user_guide.md)
-- [Documentación Técnica](docs/technical/technical.md)
-- [Arquitectura del Sistema](docs/technical/architecture.md)
+- [Documentación Técnica](docs/technical/architecture.md)
 - [Guía de Desarrollo](docs/technical/development.md)
-- [Seguridad](docs/technical/security.md)
-- [Despliegue](docs/technical/deployment.md)
-- [API Reference](docs/api/api.md)
+- [API Reference](docs/api.md)
+- [Contribución](docs/contributing.md)
 
 ## Contribución
 
