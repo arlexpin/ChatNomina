@@ -143,34 +143,33 @@ chatnomina/
 
 ```mermaid
 graph TD
-    subgraph Frontend
-        A[Web App] --> B[API Client]
-        C[Mobile App] --> B
+    subgraph Desktop App
+        A[Native Window] --> B[UI Components]
+        B --> C[Event Handler]
     end
 
     subgraph Backend
-        B --> D[API Gateway]
-        D --> E[Auth Service]
-        D --> F[Chat Service]
-        D --> G[Payroll Service]
-        D --> H[User Service]
+        C --> D[Auth Service]
+        C --> E[Chat Service]
+        C --> F[Payroll Service]
+        C --> G[User Service]
     end
 
     subgraph Models
-        F --> I[Intent Model]
-        F --> J[Entity Model]
-        F --> K[Response Model]
+        E --> H[Intent Model]
+        E --> I[Entity Model]
+        E --> J[Response Model]
     end
 
     subgraph Data
-        E --> L[(PostgreSQL)]
-        F --> L
-        G --> L
-        H --> L
-        F --> M[(Redis)]
-        I --> N[(Model Storage)]
-        J --> N
-        K --> N
+        D --> K[(PostgreSQL)]
+        E --> K
+        F --> K
+        G --> K
+        E --> L[(Redis)]
+        H --> M[(Model Storage)]
+        I --> M
+        J --> M
     end
 ```
 
@@ -178,22 +177,22 @@ graph TD
 
 ```mermaid
 sequenceDiagram
-    participant C as Cliente
-    participant A as API Gateway
+    participant U as Usuario
+    participant W as Ventana Nativa
     participant S as Chat Service
     participant M as Models
     participant D as Database
     participant R as Redis
 
-    C->>A: POST /api/chat/message
-    A->>S: Procesar mensaje
+    U->>W: Ingresa mensaje
+    W->>S: Procesar mensaje
     S->>M: Clasificar intención
     S->>M: Extraer entidades
     S->>D: Consultar datos
     S->>R: Cachear contexto
     S->>M: Generar respuesta
-    S->>A: Respuesta
-    A->>C: JSON response
+    S->>W: Actualizar UI
+    W->>U: Mostrar respuesta
 ```
 
 ## Desarrollo
@@ -209,31 +208,28 @@ sequenceDiagram
 
 ```python
 from typing import Dict, List, Optional
+from nicegui import ui
 
-def process_message(
-    message: str,
-    context: Optional[Dict[str, any]] = None
-) -> Dict[str, any]:
-    """Procesa un mensaje del usuario.
-
-    Args:
-        message: Mensaje a procesar.
-        context: Contexto opcional de la conversación.
-
-    Returns:
-        Dict con la respuesta procesada.
-
-    Raises:
-        ValueError: Si el mensaje está vacío.
+class ChatNominaApp:
+    """Aplicación nativa de chat para consultas de nómina.
+    
+    Esta clase maneja la interfaz de usuario nativa y la lógica
+    de procesamiento de mensajes.
     """
-    if not message.strip():
-        raise ValueError("El mensaje no puede estar vacío")
-
-    # Procesar mensaje
-    return {
-        "text": "Respuesta procesada",
-        "confidence": 0.95
-    }
+    
+    def __init__(self):
+        """Inicializa la aplicación nativa."""
+        self.window_size = (450, 750)
+        self.setup_ui()
+        
+    def setup_ui(self):
+        """Configura la interfaz de usuario nativa."""
+        ui.page('/')(self.main_page)
+        ui.run(
+            title='ChatNomina',
+            native=True,
+            window_size=self.window_size
+        )
 ```
 
 #### JavaScript/TypeScript
@@ -446,15 +442,20 @@ volumes:
 # app/core/logging.py
 import logging
 from logging.handlers import RotatingFileHandler
+from pathlib import Path
 
 def setup_logging():
-    """Configura el sistema de logging."""
+    """Configura el sistema de logging para la aplicación nativa."""
     logger = logging.getLogger("chatnomina")
     logger.setLevel(logging.INFO)
     
+    # Directorio de logs en la carpeta de la aplicación
+    log_dir = Path.home() / "ChatNomina" / "logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    
     # Handler para archivo
     file_handler = RotatingFileHandler(
-        "logs/app.log",
+        log_dir / "app.log",
         maxBytes=1024 * 1024,  # 1MB
         backupCount=5
     )
@@ -465,7 +466,7 @@ def setup_logging():
     )
     logger.addHandler(file_handler)
     
-    # Handler para consola
+    # Handler para consola (ventana nativa)
     console_handler = logging.StreamHandler()
     console_handler.setFormatter(
         logging.Formatter("%(levelname)s: %(message)s")
@@ -848,6 +849,11 @@ except RuntimeError as e:
 
 ## Solución de Problemas Comunes
 
+### Problemas de Interfaz
+- Si la ventana no se abre, verifica que no haya otra instancia ejecutándose
+- Para problemas de rendimiento en la interfaz, asegúrate de tener los drivers gráficos actualizados
+- Si la ventana se cierra inesperadamente, revisa los logs en la carpeta de la aplicación
+
 ### Problemas de Rendimiento
 - Si experimentas lentitud en las respuestas, considera aumentar la RAM disponible
 - Para mejorar el rendimiento, puedes ajustar los parámetros de batch_size en la configuración
@@ -857,4 +863,5 @@ except RuntimeError as e:
 - Utiliza el modo de procesamiento por lotes para mejorar el rendimiento
 - Ajusta el tamaño de los lotes según la memoria disponible
 - Considera usar caché para respuestas frecuentes
-- Implementa compresión de modelos para reducir el uso de memoria 
+- Implementa compresión de modelos para reducir el uso de memoria
+- Optimiza el renderizado de la interfaz nativa para mejor rendimiento 

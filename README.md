@@ -130,7 +130,7 @@ Este proyecto está bajo la Licencia MIT - ver el archivo [LICENSE](LICENSE) par
 
 ## Contacto
 
-Arlex Pinzón - arlex.pinzon@correo.icesi.edu.co
+Arlex Pino - apino@icesi.edu.co
 
 - Project Link: [https://github.com/arlexpin/ChatNomina](https://github.com/arlexpin/ChatNomina)
 - Universidad Icesi - Maestría en Ciencias de Datos
