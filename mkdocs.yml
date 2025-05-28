@@ -56,24 +56,25 @@ plugins:
 nav:
   - Home: index.md
   - Guía de Usuario:
-    - Introducción: user_guide.md
+    - Introducción: user_guide/user_guide.md
     - Interfaz: user_guide/interface.md
     - Consultas: user_guide/queries.md
-    - FAQ: user_guide/faq.md
   - Documentación Técnica:
-    - Arquitectura: technical.md
+    - Arquitectura: technical/architecture.md
+    - Desarrollo: technical/development.md
     - Modelos: technical/models.md
-    - API: api.md
     - Seguridad: technical/security.md
-  - Desarrollo:
-    - Guía de Desarrollo: development.md
-    - Contribución: development/contributing.md
-    - Testing: development/testing.md
-    - CI/CD: development/ci_cd.md
-  - Referencia:
-    - API Reference: api.md
-    - Configuración: reference/configuration.md
-    - Troubleshooting: reference/troubleshooting.md
+    - Despliegue: technical/deployment.md
+  - API:
+    - Referencia: api.md
+  - Contribución:
+    - Guía: contributing.md
+  - Anexos:
+    - Arquitectura: anexo_a_arquitectura.md
+    - Implementación: anexo_b_implementacion.md
+    - Evaluación: anexo_c_evaluacion.md
+    - Seguridad: anexo_d_seguridad.md
+    - Mantenimiento: anexo_e_mantenimiento.md
 
 extra:
   social:
