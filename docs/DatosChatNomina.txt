@@ -1,0 +1,62 @@
+CLIENT_ID:
+d4f0a82a-0933-4dad-b584-1fa5cd7ab1e3
+OBJETO:
+67ab4c05-d432-4cd5-89c9-172f20e2f651
+TENANT_ID:
+e994072b-523e-4bfe-86e2-442c5e10b244
+
+
+"id": "b!YLtIDIcfx0isWWNZjyn5Twq4RtPKtf1AmZL9EwdRRpjHTFOg5NodRaFJ9iDy219-",
+"lastModifiedDateTime": "2025-04-16T16:26:53Z",
+"name": "060-217-06 Gestión Bases de Datos y Validaciones",
+"webUrl": "https://icesiedu.sharepoint.com/sites/direccion-administrativa-financiera/060/06021706%20Gestin%20Bases%20de%20Datos%20y%20Validaciones"
+
+
+ACTIVOS_HM.TXT (Personal activo, toma la información de la persona)
+TipoDocumento ;Documento ;NumVinculacion ;Nombre1 ;Nombre2 ;Apellido1 ;Apellido2 ;NombreCompleto ;FechaNacimiento ;Edad ;Sexo ;CodPosicion ;NombrePosicion ;Dependencia ;CencoPrincipal ;FechaIngreso ;FechaVencimiento ;TipoContratacion ;EPS ;SubTipoCotizante ;AFP ;Cesantias ;FechaSueldo ;Sueldo ;DocumentoJefe ;NombreJefe ;CorreoInstitucional ;CorreoPersonal ;TelefonoMovil ;Direccion ;Esquema ;Tarifa ;FechaIniTarifa ;ValorTarifa ;Cuenta ;TipoCuenta ;BANCO ;CuentaNomina
+
+ACUMULADOS.TXT (Detalle de los pagos de nomina que ha tenido)
+TipoDocumento ;Documento ;NumVinculacion ;Nombre1 ;Nombre2 ;Apellido1 ;Apellido2 ;NombreCompleto ;FechaNacimiento ;Edad ;Sexo ;CodPosicion ;NombrePosicion ;Dependencia ;CencoPrincipal ;FechaIngreso ;FechaVencimiento ;TipoContratacion ;EPS ;SubTipoCotizante ;AFP ;Cesantias ;FechaSueldo ;Sueldo ;DocumentoJefe ;NombreJefe ;CorreoInstitucional ;CorreoPersonal ;TelefonoMovil ;Direccion ;Esquema ;Tarifa ;FechaIniTarifa ;ValorTarifa ;Cuenta ;TipoCuenta ;BANCO ;CuentaNomina
+
+AUSENTISMO_HM.TXT (Detalle de las ausencias que ha tenido la persona, desde vacaciones tomadas hasta incapacidades y permisos)
+NUMVINCULACION ;CODEMPLEADO ;NombreCompleto ;CODAUSENCIATIPO ;CODAUSENCIASUBTIPO ;AUSENCIASUBTIPO ;DIASCALENDARIO ;TIPODISFRUTE ;FECHAINICIO ;FECHAFIN ;DIAS
+
+VALIDADOR_RETENCION.TXT (Detalle del proceso de retención en la fuente)
+CODNOMINA ;REGIMEN_SALARIAL ;UNIDAD_EJECUTORA ;CODEMPLEADO ;NUMVINCULACION ;Ingresos ;Total_Sal ;Total_Pensión ;Bonos no Gravados ;Bonos Gravados ;Dep ;Medicina Prepagada ;Vivienda ;% Ret ;Aporte FVOL ;Aporte AFC ;Ret Fuente ;Proced ;Ingreso Calculado Sist
+
+CONSIGNACIONES_HM.TXT (Valor y fecha de la consignación de la nomina)
+NUMVINCULACION ;CODEMPLEADO ;NombreCompleto ;Ingresos ;Descuentos ;ValorConsignación ;CODPROCEDENCIA ;CODNOMINA ;TIPOCUENTA ;NUMCUENTA ;CODBANCO ;BANCO ;CODBANCOLOMBIA
+
+CUENTAS_BANCARIAS_HM.TXT (Información de las cuentas bancarias que ha tenido la persona)
+NumVinculacion ;NumDocumento ;NombreCompleto ;FechaCuenta ;CuentaNomina ;Banco ;TipoCuenta ;NumCuenta
+
+HISTORICO_SUELDO_HM.TXT (Historico de los salarios que ha tenido la persona)
+NumVinculacion ;Documento ;NombreCompleto ;FechaInicioSueldo ;FechaFinSueldo ;Sueldo
+
+NOVEDADES_HM.TXT (Registro de los pagos adicionales y descuentos que ha tenido la persona)
+NumVinculacion ;Documento ;NombreCompleto ;CodConcepto ;FechaInicio ;FechaFin ;FechaOcurrencia ;Estado ;Valor ;ValorTotal ;ValorAcumulado ;Observacion ;CENCO ;TipoNovedad
+
+VACACIONES_DERECHO_HM.TXT (Registro de las vacaciones que tiene derecho, se cruza contra el archivo de Ausentismo_hm.txt para determinar los dias pendientes)
+NumVinculacion ;Periodo ;Estado ;DiasDerecho ;DiasDisfrute
+
+VINCULACION_DETALLE_HM.TXT (Información de los diferentes cambios que ha tenido el contrato de la persona)
+Documento ;NumVinculacion ;NumVinDet ;Puesto ;Posicion ;Unidad ;Salario ;InicioRol ;FinRol ;Esquema ;NovedadVinculacion ;Frecuencia ;RiesgoARL
+
+VINCULACION_HM.TXT (Información de los diferentes contratos que ha tenido la persona)
+Documento ;NumVinculacion ;FechaIngreso ;FechaRetiro ;MotivoContratacion ;MotivoRetiro ;NivelContratacion ;TipoVinculacion ;Dedicacion ;Area
+
+H_POSICIONES_HR.xlsx (Historico de las posiciones que ha ocupado la persona)
+#	Identificación	Nombre	Id Posición	Posición	Fecha Inicio	Fecha Fin	Resumen	Es cargo principal
+
+TARIFAS_HR.xlsx (Historico de las tarifas por horas que ha tenido la persona)
+#	Identificación	Nombre	Posición	Cod. Tarifa	Actividad	Fecha Inicia	Fecha Termina	Nivel Titulación	Procedencia	Valor Tarfia Nominal	Valor Tarfia Integral	Valor Tarfia Honorario	Valor Tarfia Asincrónica	Estado
+
+
+REGLAMENTO INTERNO DE TRABAJO - MODIFICACIÓN V2.doc (Reglamento interno que tiene la normatividad de la institucion)
+Procedimiento Liquidación de nómina.docx (Información de como funciona el proceso de nomina)
+
+Ejecutar:
+
+cd D:\OneDrive - Universidad Icesi\Proyectos en curso\ZZ - Python\Maestria Ciencias de Datos\ProyectoGradoII\ChatNomina
+
+streamlit run app.py
