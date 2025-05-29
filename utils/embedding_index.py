@@ -13,6 +13,7 @@ import re
 from datetime import datetime
 import pickle
 import os
+import json
 
 # Configurar logging
 logging.basicConfig(
@@ -24,19 +25,31 @@ logger = logging.getLogger(__name__)
 @dataclass
 class IndexConfig:
     """Configuración mejorada para el indexador de documentos."""
-    chunk_size: int = 3  # Reducido para fragmentos más concisos
+    chunk_size: int = 10  # Aumentado para fragmentos más grandes
     batch_size: int = 32
-    min_chunk_words: int = 10  # Aumentado para asegurar fragmentos significativos
-    model_name: str = "all-mpnet-base-v2"
+    min_chunk_words: int = 10  # Aumentado para fragmentos más significativos
+    model_name: str = "hiiamsid/sentence_similarity_spanish_es"  # Modelo específico para español
     collection_name: str = "documentos_institucionales"
     cache_dir: str = ".embedding_cache"
     compression_threshold: int = 1000
     max_workers: int = 4
     hybrid_search_weight: float = 0.7
-    chunk_overlap: int = 1  # Reducido para minimizar redundancia
-    min_similarity_threshold: float = 0.65  # Aumentado para mayor precisión
-    max_chunk_words: int = 150  # Aumentado para mantener más contexto
-    context_window: int = 3  # Aumentado para mejor contexto
+    chunk_overlap: int = 3  # Aumentado para mejor contexto
+    min_similarity_threshold: float = 0.55  # Reducido para más flexibilidad
+    max_chunk_words: int = 300  # Aumentado para mantener más contexto
+    context_window: int = 8  # Aumentado para mejor contexto
+    onnx_providers: List[str] = None  # Nuevo campo para providers de ONNX
+    training_data_weight: float = 0.8  # Peso para resultados del dataset de entrenamiento
+    include_training_data: bool = True  # Incluir dataset de entrenamiento en búsquedas
+
+    def __post_init__(self):
+        # Configurar ONNX Runtime para usar solo CPU
+        os.environ["ORT_TENSORRT_ENABLED"] = "0"
+        os.environ["ORT_CUDA_ENABLED"] = "0"
+        os.environ["ORT_CPU_ENABLED"] = "1"
+        os.environ["ORT_PROVIDERS"] = "CPUExecutionProvider"
+        os.environ["ORT_DISABLE_ALL"] = "1"
+        self.onnx_providers = ["CPUExecutionProvider"]
 
 class DocumentIndexer:
     def __init__(self, config: Optional[IndexConfig] = None):
@@ -45,10 +58,15 @@ class DocumentIndexer:
         self.embedding_cache = {}
         self._setup_directories()
         self.indexacion_completa = False
+        self.training_data_indexed = False
         
         # Inicializar el modelo de embeddings con cache
         try:
-            self.modelo_embeddings = SentenceTransformer(self.config.model_name)
+            self.modelo_embeddings = SentenceTransformer(
+                self.config.model_name,
+                device="cpu",
+                cache_folder=self.config.cache_dir
+            )
             self._load_embedding_cache()
         except Exception as e:
             logger.error(f"Error al cargar el modelo de embeddings: {e}")
@@ -60,11 +78,17 @@ class DocumentIndexer:
             self.client = chromadb.Client(Settings(
                 persist_directory=str(persist_path),
                 anonymized_telemetry=False,
-                allow_reset=True
+                allow_reset=True,
+                is_persistent=True
             ))
             self.coleccion = self.client.get_or_create_collection(
                 self.config.collection_name,
-                metadata={"hnsw:space": "cosine", "hnsw:construction_ef": 100}
+                metadata={
+                    "hnsw:space": "cosine",
+                    "hnsw:construction_ef": 200,
+                    "hnsw:search_ef": 100,
+                    "hnsw:M": 64
+                }
             )
             logger.info(f"Colección '{self.config.collection_name}' inicializada correctamente")
         except Exception as e:
@@ -129,7 +153,7 @@ class DocumentIndexer:
             # Dividir en oraciones para mejor contexto
             sentences = re.split(r'(?<=[.!?])\s+', paragraph)
             
-            # Si es un título, mantenerlo con la siguiente oración
+            # Si es un título, mantenerlo con el siguiente párrafo
             if is_heading and sentences:
                 heading = sentences.pop(0)
                 if sentences:
@@ -154,11 +178,9 @@ class DocumentIndexer:
                     for sub in sub_sentences:
                         sub = sub.strip()
                         if len(sub.split()) >= self.config.min_chunk_words:
-                            # Si el chunk actual está vacío, agregar el sub como nuevo chunk
                             if not current_chunk:
                                 chunks.append(sub)
                             else:
-                                # Agregar el sub al chunk actual si hay espacio
                                 if current_length + len(sub.split()) <= self.config.max_chunk_words:
                                     current_chunk.append(sub)
                                     current_length += len(sub.split())
@@ -231,83 +253,176 @@ class DocumentIndexer:
         # Implementación básica de compresión
         return embedding.astype(np.float32)
 
-    async def reiniciar_indexacion(self) -> None:
-        """Reinicia la indexación limpiando la colección existente."""
+    def reiniciar_indexacion(self):
+        """Reinicia la indexación eliminando todos los documentos existentes."""
         try:
-            # Obtener todos los IDs existentes
+            logger.info("Iniciando reinicio de indexación...")
+            
+            # Obtener todos los documentos
             resultados = self.coleccion.get()
-            if resultados and resultados['ids']:
-                self.coleccion.delete(ids=resultados['ids'])
-                logger.info(f"Colección limpiada: {len(resultados['ids'])} documentos eliminados")
-            self.indexacion_completa = False
+            if not resultados or not resultados['ids']:
+                logger.info("No hay documentos para eliminar")
+                return
+                
+            total_docs = len(resultados['ids'])
+            logger.info(f"Encontrados {total_docs} documentos para eliminar")
+            
+            # Eliminar documentos en lotes
+            batch_size = 100
+            for i in range(0, total_docs, batch_size):
+                batch_ids = resultados['ids'][i:i + batch_size]
+                try:
+                    self.coleccion.delete(ids=batch_ids)
+                    logger.info(f"Eliminados {len(batch_ids)} documentos (lote {i//batch_size + 1})")
+                except Exception as e:
+                    logger.error(f"Error eliminando lote {i//batch_size + 1}: {str(e)}")
+                    
+            # Limpiar caché de embeddings
+            self.embedding_cache.clear()
+            logger.info("Caché de embeddings limpiada")
+            
+            # Verificar que la colección está vacía
+            resultados = self.coleccion.get()
+            if not resultados or not resultados['ids']:
+                logger.info("Reinicio de indexación completado exitosamente")
+            else:
+                logger.warning(f"Quedaron {len(resultados['ids'])} documentos sin eliminar")
+                
         except Exception as e:
-            logger.error(f"Error al reiniciar indexación: {e}")
+            logger.error(f"Error en reinicio de indexación: {str(e)}", exc_info=True)
             raise
 
-    async def indexar_documentos(self, documentos_dict: Dict[str, str]) -> int:
-        """Indexa documentos de manera asíncrona y eficiente."""
-        total_fragmentos = 0
-        tasks = []
-        documentos_procesados = 0
-        
+    async def indexar_documentos(self, documentos: Dict[str, str]) -> None:
+        """Indexa los documentos proporcionados usando embeddings."""
         try:
-            # Reiniciar la indexación
-            await self.reiniciar_indexacion()
+            if not documentos:
+                logger.warning("No hay documentos para indexar")
+                return
+                
+            logger.info(f"Iniciando indexación de {len(documentos)} documentos...")
+            total_fragmentos = 0
+            documentos_procesados = 0
             
-            for nombre_doc, texto in documentos_dict.items():
-                if not texto or not isinstance(texto, str):
-                    logger.warning(f"Documento inválido o vacío: {nombre_doc}")
+            for nombre, contenido in documentos.items():
+                try:
+                    logger.info(f"Procesando documento: {nombre}")
+                    
+                    # Dividir en fragmentos
+                    fragmentos = self._chunk_text(contenido)
+                    if not fragmentos:
+                        logger.warning(f"No se generaron fragmentos para {nombre}")
+                        continue
+                        
+                    logger.info(f"Generados {len(fragmentos)} fragmentos para {nombre}")
+                    total_fragmentos += len(fragmentos)
+                    
+                    # Procesar fragmentos en lotes
+                    batch_size = self.config.batch_size
+                    for i in range(0, len(fragmentos), batch_size):
+                        batch = fragmentos[i:i + batch_size]
+                        try:
+                            # Generar embeddings para el lote
+                            embeddings = await self._process_batch_async(batch, [{
+                                "origen": nombre,
+                                "fecha_indexacion": datetime.now().isoformat(),
+                                "chunk_index": j,
+                                "total_chunks": len(fragmentos)
+                            } for j in range(i, min(i + batch_size, len(fragmentos)))], [f"{nombre}_{j+1}" for j in range(i, min(i + batch_size, len(fragmentos)))]
+                            )
+                            
+                            logger.debug(f"Indexado lote {i//batch_size + 1} de {nombre}: {len(batch)} fragmentos")
+                            
+                        except Exception as e:
+                            logger.error(f"Error procesando lote {i//batch_size + 1} de {nombre}: {str(e)}")
+                            continue
+                            
+                    documentos_procesados += 1
+                    logger.info(f"Documento {nombre} indexado exitosamente")
+                    
+                except Exception as e:
+                    logger.error(f"Error procesando documento {nombre}: {str(e)}", exc_info=True)
                     continue
                     
-                logger.info(f"Procesando documento: {nombre_doc}")
-                fragmentos = self._chunk_text(texto)
-                
-                if not fragmentos:
-                    logger.warning(f"No se generaron fragmentos para {nombre_doc}")
-                    continue
-                    
-                logger.info(f"Generados {len(fragmentos)} fragmentos para {nombre_doc}")
-                documentos_procesados += 1
-                
-                # Procesar en lotes asíncronos
-                for i in range(0, len(fragmentos), self.config.batch_size):
-                    batch = fragmentos[i:i + self.config.batch_size]
-                    batch_documents = batch
-                    batch_metadatas = [{
-                        "origen": nombre_doc,
-                        "fecha_indexacion": datetime.now().isoformat(),
-                        "chunk_index": j,
-                        "total_chunks": len(fragmentos)
-                    } for j in range(i, i + len(batch))]
-                    batch_ids = [f"{nombre_doc}_{j}" for j in range(i, i + len(batch))]
-                    
-                    task = asyncio.create_task(
-                        self._process_batch_async(batch_documents, batch_metadatas, batch_ids)
-                    )
-                    tasks.append(task)
-                    total_fragmentos += len(batch)
+            # Verificar resultados
+            resultados = self.coleccion.get()
+            total_indexados = len(resultados['ids']) if resultados and resultados['ids'] else 0
             
-            # Esperar a que todos los lotes se procesen
-            if tasks:
-                await asyncio.gather(*tasks)
-                logger.info(f"Procesados {documentos_procesados} documentos, {total_fragmentos} fragmentos en total")
-                self.indexacion_completa = True
-            else:
-                logger.warning("No se generaron tareas de indexación")
+            logger.info(f"""
+            Resumen de indexación:
+            - Documentos procesados: {documentos_procesados}/{len(documentos)}
+            - Fragmentos generados: {total_fragmentos}
+            - Fragmentos indexados: {total_indexados}
+            """)
             
-            # Guardar cache de embeddings
-            self._save_embedding_cache()
-            
-            return total_fragmentos
+            self.indexacion_completa = True
             
         except Exception as e:
-            logger.error(f"Error durante la indexación: {e}")
-            self.indexacion_completa = False
+            logger.error(f"Error en indexación: {str(e)}", exc_info=True)
             raise
 
     def esta_indexacion_completa(self) -> bool:
         """Retorna si la indexación está completa."""
         return self.indexacion_completa
+
+    async def indexar_dataset_entrenamiento(self, dataset_path: str) -> None:
+        """Indexa el dataset de entrenamiento como fuente adicional de conocimiento."""
+        try:
+            if not self.config.include_training_data:
+                logger.info("Indexación de dataset de entrenamiento desactivada en configuración")
+                return
+
+            logger.info(f"Iniciando indexación del dataset de entrenamiento desde: {dataset_path}")
+            
+            # Cargar dataset
+            try:
+                with open(dataset_path, 'r', encoding='utf-8') as f:
+                    dataset = json.load(f)
+            except Exception as e:
+                logger.error(f"Error al cargar dataset de entrenamiento: {e}")
+                return
+
+            # Preparar documentos para indexación
+            documentos = []
+            metadatas = []
+            ids = []
+            
+            for i, (pregunta, respuesta) in enumerate(zip(dataset['question'], dataset['answer'])):
+                # Crear documento combinando pregunta y respuesta
+                doc = f"Pregunta: {pregunta}\nRespuesta: {respuesta}"
+                documentos.append(doc)
+                
+                # Metadata específica para dataset de entrenamiento
+                metadatas.append({
+                    "origen": "dataset_entrenamiento",
+                    "tipo": "qa_pair",
+                    "pregunta": pregunta,
+                    "respuesta": respuesta,
+                    "fecha_indexacion": datetime.now().isoformat(),
+                    "chunk_index": i
+                })
+                
+                ids.append(f"training_{i+1}")
+
+            # Indexar en lotes
+            batch_size = self.config.batch_size
+            for i in range(0, len(documentos), batch_size):
+                batch_docs = documentos[i:i + batch_size]
+                batch_metadatas = metadatas[i:i + batch_size]
+                batch_ids = ids[i:i + batch_size]
+                
+                try:
+                    await self._process_batch_async(batch_docs, batch_metadatas, batch_ids)
+                    logger.debug(f"Indexado lote {i//batch_size + 1} del dataset de entrenamiento")
+                except Exception as e:
+                    logger.error(f"Error procesando lote {i//batch_size + 1} del dataset: {str(e)}")
+                    continue
+
+            self.training_data_indexed = True
+            logger.info(f"Dataset de entrenamiento indexado exitosamente: {len(documentos)} pares QA")
+            
+        except Exception as e:
+            logger.error(f"Error en indexación del dataset: {str(e)}", exc_info=True)
+            raise
 
     def buscar_pregunta_semantica(
         self, 
@@ -316,100 +431,100 @@ class DocumentIndexer:
         filtros: Optional[Dict] = None,
         use_hybrid: bool = True
     ) -> str:
-        """Búsqueda semántica mejorada con fragmentos más largos y contextuales."""
+        """Búsqueda semántica mejorada con soporte para dataset de entrenamiento."""
         try:
-            # Preparar la consulta
-            query_embedding = self._get_embedding(pregunta)
+            # Normalizar la pregunta
+            pregunta = pregunta.strip().lower()
             
-            # Configurar parámetros de búsqueda
-            search_params = {
-                "query_embeddings": [query_embedding],
-                "n_results": top_k * 3,  # Aumentado para obtener más resultados
-                "where": filtros if filtros else None
-            }
-            
-            if use_hybrid:
-                # Búsqueda híbrida mejorada
-                keyword_results = self.coleccion.query(
-                    query_texts=[pregunta],
-                    n_results=top_k * 4,  # Aumentado para más resultados
-                    where=filtros
-                )
+            # Ajustar filtros para incluir dataset de entrenamiento si está indexado
+            if filtros is None:
+                filtros = {
+                    "origen": {
+                        "$in": [
+                            "REGLAMENTO INTERNO DE TRABAJO - MODIFICACIÓN V2.docx",
+                            "Procedimiento Liquidación de nómina.docx"
+                        ]
+                    }
+                }
                 
-                semantic_results = self.coleccion.query(**search_params)
-                
-                # Combinar y re-ranking de resultados
-                combined_results = self._combine_search_results(
-                    semantic_results, 
-                    keyword_results,
-                    pregunta
-                )
-                
-                resultados = combined_results
-            else:
-                resultados = self.coleccion.query(**search_params)
+                if self.training_data_indexed and self.config.include_training_data:
+                    filtros["origen"]["$in"].append("dataset_entrenamiento")
+
+            # Realizar búsqueda semántica
+            resultados = self.coleccion.query(
+                query_texts=[pregunta],
+                n_results=top_k * 5,
+                include=["documents", "metadatas", "distances"],
+                where=filtros
+            )
 
             if not resultados['documents'] or not resultados['documents'][0]:
-                return "No se encontraron fragmentos relevantes para la consulta."
+                logger.warning(f"No se encontraron resultados para la pregunta: {pregunta}")
+                return "No se encontraron resultados relevantes en la documentación."
 
-            # Formatear y re-ranking de resultados
             respuestas = []
             scores = []
-            
+            seen_docs = set()
+
+            # Procesar y rankear resultados
             for i in range(len(resultados['documents'][0])):
                 fragmento = resultados['documents'][0][i]
                 metadata = resultados['metadatas'][0][i]
                 score = resultados.get('distances', [[]])[0][i] if 'distances' in resultados else None
-                
-                # Calcular score combinado
+
                 if score is not None:
                     # Normalizar score
                     normalized_score = 1 - score
-                    
-                    # Aplicar umbral de similitud más flexible
-                    if normalized_score < self.config.min_similarity_threshold:
-                        continue
-                    
-                    # Calcular score adicional basado en longitud y relevancia
-                    length_score = min(1.0, len(fragmento.split()) / self.config.max_chunk_words)  # Normalizar por longitud máxima
-                    keyword_score = self._calculate_keyword_score(pregunta, fragmento)
-                    
-                    # Score final combinado con más peso a la longitud
-                    final_score = (normalized_score * 0.5 + length_score * 0.3 + keyword_score * 0.2)
-                    
-                    scores.append(final_score)
-                    
-                    # Formatear respuesta con más contexto
-                    respuesta = (
-                        f"📄 Documento: {metadata['origen']}\n"
-                        f"📅 Indexado: {metadata.get('fecha_indexacion', 'N/A')}\n"
-                        f"📝 Fragmento: {fragmento}\n"
-                        f"🎯 Relevancia: {final_score:.2%}"
-                    )
-                    
-                    respuestas.append(respuesta)
 
-            # Ordenar por score final y asegurar respuestas más largas
+                    # Ajustar umbral y pesos según el origen
+                    if metadata['origen'] == "dataset_entrenamiento":
+                        min_threshold = 0.45  # Umbral más bajo para dataset de entrenamiento
+                        final_score = normalized_score * self.config.training_data_weight
+                    else:
+                        min_threshold = self.config.min_similarity_threshold
+                        length_score = min(1.0, len(fragmento.split()) / self.config.max_chunk_words)
+                        keyword_score = self._calculate_keyword_score(pregunta, fragmento)
+                        final_score = (
+                            normalized_score * 0.5 +
+                            length_score * 0.3 +
+                            keyword_score * 0.2
+                        )
+
+                    if normalized_score < min_threshold:
+                        continue
+
+                    # Formatear respuesta según el origen
+                    if metadata['origen'] == "dataset_entrenamiento":
+                        respuesta = (
+                            f"📚 Respuesta del Dataset de Entrenamiento:\n"
+                            f"❓ Pregunta Original: {metadata['pregunta']}\n"
+                            f"✅ Respuesta: {metadata['respuesta']}\n"
+                            f"🎯 Relevancia: {final_score:.2%}"
+                        )
+                    else:
+                        respuesta = (
+                            f"📄 Documento: {metadata['origen']}\n"
+                            f"📝 Fragmento: {fragmento}\n"
+                            f"🎯 Relevancia: {final_score:.2%}"
+                        )
+
+                    # Solo incluir si es un documento nuevo o tiene mejor score
+                    doc_id = f"{metadata['origen']}_{metadata.get('chunk_index', i)}"
+                    if doc_id not in seen_docs or final_score > max(scores):
+                        scores.append(final_score)
+                        respuestas.append(respuesta)
+                        seen_docs.add(doc_id)
+
+            # Ordenar y seleccionar mejores resultados
             if respuestas:
                 sorted_results = [r for _, r in sorted(zip(scores, respuestas), reverse=True)]
-                # Seleccionar los mejores resultados asegurando variedad
-                selected_results = []
-                seen_docs = set()
-                
-                for result in sorted_results:
-                    doc_name = result.split('\n')[0]  # Obtener nombre del documento
-                    if doc_name not in seen_docs or len(selected_results) < top_k:
-                        selected_results.append(result)
-                        seen_docs.add(doc_name)
-                    if len(selected_results) >= top_k:
-                        break
-                
-                return "\n\n".join(selected_results)
+                return "\n\n".join(sorted_results[:top_k])
             else:
-                return "No se encontraron resultados relevantes."
+                logger.warning(f"No se encontraron resultados relevantes para: {pregunta}")
+                return "No se encontraron resultados relevantes en la documentación."
 
         except Exception as e:
-            logger.error(f"Error durante la búsqueda: {e}")
+            logger.error(f"Error durante la búsqueda: {e}", exc_info=True)
             return f"Error al procesar la consulta: {str(e)}"
 
     def _calculate_keyword_score(self, query: str, text: str) -> float:

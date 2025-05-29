@@ -98,6 +98,12 @@ class ChatNominaApp:
         # Configuración
         self.MODELO_DIR = "D:/OneDrive - Universidad Icesi/Proyectos en curso/ZZ - Python/Maestria Ciencias de Datos/ProyectoGradoII/ChatNomina/modelo_finetuneado/"
         self.MAX_LENGTH = 512
+        
+        # Configuración básica de PyTorch
+        os.environ["TOKENIZERS_PARALLELISM"] = "false"
+        os.environ["OMP_NUM_THREADS"] = "1"
+        
+        # Resto de la configuración inicial
         self.TENANT_ID = os.getenv("TENANT_ID", "e994072b-523e-4bfe-86e2-442c5e10b244")
         self.CLIENT_ID = os.getenv("CLIENT_ID", "d4f0a82a-0933-4dad-b584-1fa5cd7ab1e3")
         self.AUTHORITY = f"https://login.microsoftonline.com/{self.TENANT_ID}"
@@ -111,11 +117,12 @@ class ChatNominaApp:
         self.documento_usuario: Optional[str] = None
         self.access_token: Optional[str] = None
         
-        # Modelos
+        # Modelos (inicialmente None)
         self.model_t5: Optional[T5ForConditionalGeneration] = None
         self.tokenizer_t5: Optional[T5Tokenizer] = None
         self.bert_model: Optional[AutoModelForSequenceClassification] = None
         self.bert_tokenizer: Optional[AutoTokenizer] = None
+        self.qa_pipeline = None
         
         # Categorías de preguntas y transformaciones
         self.transform_keywords = get_transform_keywords()
@@ -141,57 +148,82 @@ class ChatNominaApp:
         self.word_docs: Dict[str, Any] = {}
         self.loading = False
         self.documentos_cargados = False
+        self.modelos_cargados = False
         
         self.app = PublicClientApplication(client_id=self.CLIENT_ID, authority=self.AUTHORITY)
         
-        self._cargar_modelos()
-
-        # Initialize DocumentIndexer
-        indexer_config = IndexConfig(model_name="paraphrase-multilingual-MiniLM-L12-v2")
+        # Initialize DocumentIndexer (sin cargar modelos aún)
+        indexer_config = IndexConfig(model_name="hiiamsid/sentence_similarity_spanish_es")
         self.indexer = DocumentIndexer(config=indexer_config)
-        logger.info(f"DocumentIndexer inicializado con modelo: {self.indexer.config.model_name}")
+        logger.info("ChatNominaApp inicializada (sin modelos).")
 
-        # Initialize QA Pipeline
-        self.qa_pipeline = None
-        self._cargar_qa_pipeline()
-        logger.info("ChatNominaApp inicializada.")
+    async def cargar_modelos(self):
+        """Carga los modelos necesarios después de tener los documentos."""
+        if self.modelos_cargados:
+            logger.info("Los modelos ya están cargados.")
+            return True
 
-    def _cargar_modelos(self):
-        """Carga todos los modelos necesarios."""
+        logger.info("Iniciando carga de modelos...")
         try:
-            # Cargar modelo T5
+            # Cargar modelo T5 con configuración específica para CPU
             logger.info(f"Cargando modelo T5 desde: {self.MODELO_DIR}...")
             self.model_t5 = T5ForConditionalGeneration.from_pretrained(
                 self.MODELO_DIR,
                 device_map="cpu",
-                torch_dtype=torch.float32
+                torch_dtype=torch.float32,
+                local_files_only=True,
+                use_cache=True,
+                low_cpu_mem_usage=True
             )
-            self.tokenizer_t5 = T5Tokenizer.from_pretrained(self.MODELO_DIR)
             
-            # Cargar modelo BERT
+            # Configurar tokenizer con opciones específicas
+            self.tokenizer_t5 = T5Tokenizer.from_pretrained(
+                self.MODELO_DIR,
+                local_files_only=True,
+                model_max_length=self.MAX_LENGTH,
+                use_fast=True
+            )
+            
+            # Configurar el tokenizer
+            if not self.tokenizer_t5.bos_token_id:
+                self.tokenizer_t5.bos_token_id = self.tokenizer_t5.pad_token_id
+            if not self.tokenizer_t5.eos_token_id:
+                self.tokenizer_t5.eos_token_id = self.tokenizer_t5.pad_token_id
+            
+            # Cargar modelo BERT con configuración específica para CPU
             logger.info("Cargando modelo BERT...")
             self.bert_model = AutoModelForSequenceClassification.from_pretrained(
                 os.path.join(self.MODELO_DIR, "bert_model"),
-                num_labels=3
+                num_labels=3,
+                device_map="cpu",
+                torch_dtype=torch.float32
             )
             self.bert_tokenizer = AutoTokenizer.from_pretrained(
-                os.path.join(self.MODELO_DIR, "bert_model")
+                os.path.join(self.MODELO_DIR, "bert_model"),
+                use_fast=True
             )
             
-            logger.info("Modelos cargados exitosamente")
+            # Cargar QA Pipeline con configuración específica para CPU
+            logger.info("Cargando QA pipeline...")
+            self.qa_pipeline = hf_pipeline(
+                "question-answering",
+                model=self.MODELO_DIR,
+                tokenizer=self.MODELO_DIR,
+                device_map="cpu",
+                framework="pt",
+                torch_dtype=torch.float32
+            )
+            
+            logger.info("Todos los modelos cargados exitosamente")
+            self.modelos_cargados = True
+            return True
+            
         except Exception as e:
             logger.error(f"Error al cargar los modelos: {e}", exc_info=True)
+            return False
 
     def _generar_respuesta_t5(self, prompt: str) -> str:
-        """
-        Genera una respuesta usando el modelo T5.
-        
-        Args:
-            prompt (str): El texto de entrada para el modelo.
-            
-        Returns:
-            str: La respuesta generada por el modelo, o un mensaje de error si algo falla.
-        """
+        """Genera una respuesta usando el modelo T5."""
         try:
             if not self.model_t5 or not self.tokenizer_t5:
                 logger.error("Modelo T5 o tokenizer no están cargados")
@@ -199,89 +231,120 @@ class ChatNominaApp:
 
             # Limpiar y preparar el prompt
             prompt = prompt.strip()
-            
-            # Asegurar que el prompt tenga el formato correcto
             if not prompt.endswith("Respuesta:"):
-                prompt = f"{prompt}\nRespuesta:"
+                prompt = f"""Pregunta: {prompt}
+Contexto: Esta es una pregunta sobre nómina y recursos humanos de la Universidad Icesi. Responde de manera clara y concisa basándote en la normativa y procedimientos de la empresa.
+Instrucciones: Genera una respuesta específica y útil. Si no tienes información suficiente, indica que necesitas más detalles.
+Respuesta:"""
 
-            # Tokenizar el prompt
+            # Tokenizar con configuración específica
             inputs = self.tokenizer_t5(
                 prompt,
                 max_length=self.MAX_LENGTH,
                 truncation=True,
                 return_tensors="pt",
-                padding=True
+                padding=True,
+                add_special_tokens=True
             )
 
-            # Generar respuesta con parámetros ajustados
+            # Generar respuesta con parámetros optimizados
             with torch.no_grad():
-                outputs = self.model_t5.generate(
-                    inputs["input_ids"],
-                    max_length=min(self.MAX_LENGTH, 512),
-                    min_length=20,
-                    num_beams=5,
-                    length_penalty=1.0,
-                    early_stopping=True,
-                    do_sample=False,
-                    temperature=0.7,  # Reducido para respuestas más deterministas
-                    repetition_penalty=2.5,
-                    no_repeat_ngram_size=3,
-                    forced_bos_token_id=self.tokenizer_t5.bos_token_id,
-                    forced_eos_token_id=self.tokenizer_t5.eos_token_id
-                )
+                try:
+                    outputs = self.model_t5.generate(
+                        inputs["input_ids"],
+                        max_length=min(self.MAX_LENGTH, 512),
+                        min_length=100,  # Aumentado para respuestas más completas
+                        num_beams=5,     # Aumentado para mejor calidad
+                        length_penalty=2.0,  # Aumentado para favorecer respuestas más largas
+                        early_stopping=True,
+                        do_sample=True,  # Habilitado para mejor diversidad
+                        temperature=0.7,  # Reducido para más coherencia
+                        top_k=50,        # Ajustado para mejor calidad
+                        top_p=0.9,       # Ajustado para mejor calidad
+                        repetition_penalty=1.2,  # Ajustado para evitar repeticiones
+                        no_repeat_ngram_size=3,
+                        forced_bos_token_id=self.tokenizer_t5.bos_token_id,
+                        forced_eos_token_id=self.tokenizer_t5.eos_token_id,
+                        pad_token_id=self.tokenizer_t5.pad_token_id,
+                        num_return_sequences=1
+                    )
+                except RuntimeError as e:
+                    if "out of memory" in str(e):
+                        logger.error("Error de memoria al generar respuesta")
+                        return "Lo siento, hubo un error de memoria al procesar tu pregunta. Por favor, intenta con una pregunta más corta."
+                    raise
 
             # Decodificar y limpiar la respuesta
             respuesta = self.tokenizer_t5.decode(outputs[0], skip_special_tokens=True)
-            
-            # Limpiar la respuesta
             respuesta = respuesta.strip()
             
-            # Eliminar cualquier parte del prompt que pueda haberse copiado
-            if "Pregunta:" in respuesta:
-                respuesta = respuesta.split("Pregunta:")[0].strip()
-            if "Contexto:" in respuesta:
-                respuesta = respuesta.split("Contexto:")[0].strip()
-            if "Instrucciones:" in respuesta:
-                respuesta = respuesta.split("Instrucciones:")[0].strip()
-            if "Respuesta:" in respuesta:
-                respuesta = respuesta.split("Respuesta:")[-1].strip()
+            # Limpiar la respuesta de prefijos comunes y contenido no deseado
+            for prefix in ["Pregunta:", "Contexto:", "Instrucciones:", "Respuesta:"]:
+                if respuesta.startswith(prefix):
+                    respuesta = respuesta[len(prefix):].strip()
+                elif prefix in respuesta:
+                    respuesta = respuesta.split(prefix)[-1].strip()
             
-            # Verificar si la respuesta es válida
-            if len(respuesta) < 10:
-                logger.warning(f"Respuesta T5 demasiado corta: {respuesta}")
-                return "Lo siento, no pude generar una respuesta adecuada para tu pregunta."
+            # Verificar calidad de la respuesta
+            if len(respuesta) < 100 or len(respuesta.split()) < 20:  # Aumentado el mínimo de palabras
+                logger.warning(f"Respuesta T5 demasiado corta o inválida: {respuesta}")
+                return "Lo siento, no pude generar una respuesta adecuada para tu pregunta. Por favor, intenta reformularla o ser más específico."
                 
-            # Verificar si la respuesta es solo una repetición del prompt
+            # Verificar repetición del prompt
             palabras_prompt = set(prompt.lower().split())
             palabras_respuesta = set(respuesta.lower().split())
             palabras_comunes = palabras_prompt.intersection(palabras_respuesta)
             
-            if len(palabras_comunes) / len(palabras_prompt) > 0.5:
+            if len(palabras_comunes) / len(palabras_prompt) > 0.4:  # Reducido el umbral
                 logger.warning(f"Respuesta T5 parece ser una repetición del prompt: {respuesta}")
-                return "Lo siento, no pude generar una respuesta adecuada para tu pregunta."
+                return "Lo siento, no pude generar una respuesta adecuada para tu pregunta. Por favor, intenta reformularla."
+
+            # Verificar que la respuesta no contenga nombres de archivos o rutas
+            if any(ext in respuesta.lower() for ext in ['.txt', '.docx', '.xlsx', '.csv']):
+                logger.warning(f"Respuesta T5 contiene nombres de archivos: {respuesta}")
+                return "Lo siento, no pude generar una respuesta adecuada para tu pregunta. Por favor, intenta reformularla."
+
+            # Verificar que la respuesta no sea genérica
+            respuestas_genericas = [
+                "esta es una pregunta sobre nómina",
+                "esta es una pregunta sobre recursos humanos",
+                "no tengo información específica",
+                "necesito más detalles",
+                "esta es una pregunta sobre",
+                "esta pregunta está relacionada con"
+            ]
+            if any(gen in respuesta.lower() for gen in respuestas_genericas):
+                logger.warning(f"Respuesta T5 demasiado genérica: {respuesta}")
+                return "Lo siento, no pude generar una respuesta específica para tu pregunta. Por favor, intenta ser más específico en tu consulta."
 
             logger.debug(f"Respuesta T5 generada: {respuesta}")
             return respuesta
 
         except Exception as e:
             logger.error(f"Error generando respuesta con T5: {e}", exc_info=True)
-            return "No se pudo generar una respuesta en este momento."
+            return "No se pudo generar una respuesta en este momento. Por favor, intenta reformular tu pregunta."
 
     def _clasificar_pregunta(self, pregunta: str) -> Tuple[str, float]:
         """Clasifica la pregunta usando múltiples estrategias y retorna la categoría y su confianza."""
         pregunta_lower = pregunta.lower().strip()
         
-        # 1. Verificar palabras clave específicas primero usando el diccionario centralizado
+        # 1. Verificar si es una pregunta de normativa primero
+        keywords_normativa = [
+            "ley", "decreto", "resolución", "norma", "reglamento", "estatuto",
+            "código", "artículo", "parágrafo", "literal", "inciso", "jurídico",
+            "legal", "normativo", "legislación", "derecho", "obligación", "deber",
+            "acoso", "laboral", "trabajo", "contrato", "empleado", "empleador",
+            "salud", "seguridad", "riesgo", "prevención", "protección"
+        ]
+        if any(keyword in pregunta_lower for keyword in keywords_normativa):
+            logger.debug("Pregunta clasificada como 'document_qa' por contenido normativo")
+            return "document_qa", 0.9
+        
+        # 2. Verificar palabras clave específicas
         transform_info = get_transform_by_keyword(pregunta_lower)
         if transform_info:
             logger.debug(f"Pregunta clasificada como '{transform_info['category']}' por palabra clave específica")
             return transform_info['category'], 0.9
-        
-        # 2. Verificar si es una pregunta corta
-        palabras = pregunta_lower.split()
-        if len(palabras) < 5:
-            logger.debug("Pregunta clasificada como 'short_question' por longitud")
-            return "short_question", 0.9
         
         # 3. Verificar palabras clave generales
         for categoria, keywords in self.question_categories.items():
@@ -291,86 +354,27 @@ class ChatNominaApp:
         
         # 4. Usar BERT para clasificación
         try:
-            bert_categoria, bert_confianza = self._clasificar_con_bert(pregunta)
-            if bert_confianza > 0.6:  # Umbral de confianza para BERT
-                logger.debug(f"Pregunta clasificada como '{bert_categoria}' por BERT con confianza {bert_confianza:.2f}")
-                return bert_categoria, bert_confianza
+            if self.bert_model and self.bert_tokenizer:
+                inputs = self.bert_tokenizer(
+                    pregunta,
+                    return_tensors="pt",
+                    truncation=True,
+                    max_length=512
+                )
+                
+                with torch.no_grad():
+                    outputs = self.bert_model(**inputs)
+                    predictions = torch.softmax(outputs.logits, dim=1)
+                    confianza, categoria_idx = torch.max(predictions, dim=1)
+                    
+                categorias = ["specific_data", "general_info", "document_qa"]
+                return categorias[categoria_idx.item()], confianza.item()
         except Exception as e:
             logger.error(f"Error en clasificación BERT: {e}")
         
-        # 5. Verificar si hay coincidencias en embeddings
-        try:
-            embedding_categoria, embedding_confianza = self._clasificar_con_embeddings(pregunta)
-            if embedding_confianza > 0.6:  # Umbral de confianza para embeddings
-                logger.debug(f"Pregunta clasificada como '{embedding_categoria}' por embeddings con confianza {embedding_confianza:.2f}")
-                return embedding_categoria, embedding_confianza
-        except Exception as e:
-            logger.error(f"Error en clasificación con embeddings: {e}")
-        
-        # 6. Verificar si es una pregunta de normativa
-        if self._es_pregunta_normativa(pregunta):
-            logger.debug("Pregunta clasificada como 'document_qa' por contenido normativo")
-            return "document_qa", 0.7
-        
-        # Si no hay clasificación clara, usar general_info
-        logger.debug("Pregunta clasificada como 'general_info' por defecto")
-        return "general_info", 0.5
-
-    def _clasificar_con_bert(self, pregunta: str) -> Tuple[str, float]:
-        """Clasifica la pregunta usando el modelo BERT y retorna la categoría y confianza."""
-        try:
-            inputs = self.bert_tokenizer(
-                pregunta,
-                return_tensors="pt",
-                truncation=True,
-                max_length=512
-            )
-            
-            with torch.no_grad():
-                outputs = self.bert_model(**inputs)
-                predictions = torch.softmax(outputs.logits, dim=1)
-                confianza, categoria_idx = torch.max(predictions, dim=1)
-                
-            categorias = ["specific_data", "general_info", "document_qa"]
-            return categorias[categoria_idx.item()], confianza.item()
-            
-        except Exception as e:
-            logger.error(f"Error en clasificación BERT: {e}")
-            return "general_info", 0.0
-
-    def _clasificar_con_embeddings(self, pregunta: str) -> Tuple[str, float]:
-        """Clasifica la pregunta usando búsqueda semántica en embeddings."""
-        try:
-            # Buscar en el índice
-            resultados = self.indexer.buscar_pregunta_semantica(pregunta, top_k=1)
-            
-            if isinstance(resultados, str) and "No se encontraron fragmentos relevantes" in resultados:
-                return "general_info", 0.0
-                
-            # Analizar el contenido del resultado para determinar la categoría
-            if isinstance(resultados, str):
-                # Extraer el fragmento y la relevancia
-                if "(Relevancia:" in resultados:
-                    relevancia_str = resultados.split("(Relevancia:", 1)[1].split(")")[0]
-                    relevancia = float(relevancia_str.strip("%")) / 100
-                    fragmento = resultados.split("(Relevancia:", 1)[0]
-                else:
-                    fragmento = resultados
-                    relevancia = 0.7  # Valor por defecto si no hay relevancia explícita
-                
-                # Determinar categoría basada en el contenido
-                if any(kw in fragmento.lower() for kw in ["ley", "decreto", "resolución", "norma"]):
-                    return "document_qa", relevancia
-                elif any(kw in fragmento.lower() for kw in ["sueldo", "salario", "nómina", "pago"]):
-                    return "specific_data", relevancia
-                else:
-                    return "general_info", relevancia
-            
-            return "general_info", 0.0
-            
-        except Exception as e:
-            logger.error(f"Error en clasificación con embeddings: {e}")
-            return "general_info", 0.0
+        # Si no hay clasificación clara, usar document_qa para intentar buscar en documentos
+        logger.debug("Pregunta clasificada como 'document_qa' por defecto")
+        return "document_qa", 0.5
 
     def _es_pregunta_normativa(self, pregunta: str) -> bool:
         """Determina si una pregunta está relacionada con normativa."""
@@ -379,57 +383,100 @@ class ChatNominaApp:
             "código", "artículo", "parágrafo", "literal", "inciso", "jurídico",
             "legal", "normativo", "legislación", "derecho", "obligación", "deber"
         ]
-        
-        pregunta_lower = pregunta.lower()
-        return any(keyword in pregunta_lower for keyword in keywords_normativa)
+        return any(keyword in pregunta.lower() for keyword in keywords_normativa)
+
+    def _verificar_documento_en_cache(self, documento: str) -> bool:
+        """Verifica si el documento existe en el contenido de los archivos."""
+        try:
+            # Buscar en archivos TXT
+            for key, content in self.txt_cache.items():
+                if isinstance(content, str):
+                    if documento in content:
+                        logger.info(f"Documento {documento} encontrado en {key}")
+                        return True
+                elif isinstance(content, list):
+                    if any(documento in str(line) for line in content):
+                        logger.info(f"Documento {documento} encontrado en {key}")
+                        return True
+            
+            # Buscar en archivos Word
+            for key, content in self.word_docs.items():
+                if isinstance(content, str):
+                    if documento in content:
+                        logger.info(f"Documento {documento} encontrado en {key}")
+                        return True
+                elif isinstance(content, list):
+                    if any(documento in str(line) for line in content):
+                        logger.info(f"Documento {documento} encontrado en {key}")
+                        return True
+            
+            logger.warning(f"Documento {documento} no encontrado en ningún archivo")
+            return False
+        except Exception as e:
+            logger.error(f"Error al verificar documento en caché: {e}")
+            return False
 
     def _responder_pregunta(self, pregunta_texto: str) -> str:
-        """Orquesta la lógica para responder una pregunta del usuario de manera unificada."""
+        """Orquesta la lógica para responder una pregunta del usuario."""
         logger.info(f"Procesando pregunta: \"{pregunta_texto}\"")
+        logger.info(f"Estado actual - Documento usuario: {self.documento_usuario}, Documentos cargados: {self.documentos_cargados}")
+        logger.info(f"Estado de caché - TXT: {len(self.txt_cache)}, Word: {len(self.word_docs)}")
+        
+        # Verificar si el documento existe en los archivos
+        if self.documento_usuario:
+            if not self._verificar_documento_en_cache(self.documento_usuario):
+                return f"No se encontró información para el documento {self.documento_usuario}. Por favor, verifica el número e intenta nuevamente."
+        
         respuesta_final = "Lo siento, no pude encontrar una respuesta para tu pregunta en este momento."
 
+        # --- PASO 1: Verificar documento de usuario ---
         if not self.documento_usuario:
+            logger.warning("No hay documento de usuario registrado")
             return "Por favor, ingresa tu número de documento primero para que pueda ayudarte mejor."
 
-        if not self.indexer.esta_indexacion_completa():
+        # --- PASO 2: Verificar documentos y modelos cargados ---
+        if not self.documentos_cargados or not self.modelos_cargados:
+            logger.warning("Los documentos o modelos no están completamente cargados")
             return "Los documentos aún se están procesando. Por favor, espera un momento antes de hacer preguntas."
 
-        # Clasificar la pregunta con todas las estrategias
+        # --- PASO 3: Clasificar la pregunta ---
         categoria, confianza = self._clasificar_pregunta(pregunta_texto)
         logger.info(f"Pregunta clasificada como: {categoria} (confianza: {confianza:.2f})")
         
-        # --- PASO 1: Manejar preguntas cortas ---
-        if categoria == "short_question":
-            return "Por favor, proporciona más detalles en tu pregunta para poder ayudarte mejor."
-
-        # --- PASO 2: Funciones de transformación directa (keywords) ---
+        # --- PASO 4: Funciones de transformación directa (keywords) ---
         if categoria == "specific_data" and confianza > 0.7:
             transform_info = get_transform_by_keyword(pregunta_texto)
+            logger.info(f"Transformación encontrada: {transform_info}")
             if transform_info:
                 try:
                     transform_func = self.transform_functions[transform_info["transform_func"]]
+                    logger.info(f"Ejecutando transformación: {transform_info['transform_func']}")
                     respuesta_transform = transform_func(self.documento_usuario, self.txt_cache)
+                    logger.info(f"Resultado de transformación: {respuesta_transform}")
                     if respuesta_transform and "no se encontró información" not in respuesta_transform.lower():
                         logger.info(f"Respuesta generada por transformación directa: {respuesta_transform}")
                         return respuesta_transform
+                    else:
+                        logger.warning("Transformación no encontró información válida")
                 except Exception as e:
                     logger.error(f"Error en transformación directa para {transform_info['transform_func']}: {e}")
-
-        # --- PASO 3: Búsqueda Semántica (RAG) Mejorada ---
-        if self.indexer and self.qa_pipeline and self.indexer.esta_indexacion_completa():
+        
+        # --- PASO 5: Búsqueda Semántica (RAG) para preguntas generales o de normativa ---
+        if categoria in ["document_qa", "general_info"] and self.indexer and self.qa_pipeline and self.indexer.esta_indexacion_completa():
             logger.debug("Intentando RAG mejorado (Búsqueda Semántica + QA Pipeline)...")
             
-            # Búsqueda semántica con más resultados
-            fragmentos_semanticos = self.indexer.buscar_pregunta_semantica(pregunta_texto, top_k=5)
+            # Buscar en todos los documentos indexados
+            fragmentos_semanticos = self.indexer.buscar_pregunta_semantica(
+                pregunta_texto,
+                top_k=5
+            )
             
             if isinstance(fragmentos_semanticos, str) and "No se encontraron fragmentos relevantes" not in fragmentos_semanticos:
-                # Procesar cada fragmento encontrado
                 fragmentos_procesados = []
                 for fragmento in fragmentos_semanticos.split("\n\n"):
                     if not fragmento.strip():
                         continue
                         
-                    # Extraer el texto del fragmento
                     texto_fragmento = fragmento
                     if "📝 Fragmento:" in fragmento:
                         texto_fragmento = fragmento.split("📝 Fragmento:", 1)[1].split("\n")[0].strip()
@@ -444,32 +491,29 @@ class ChatNominaApp:
                         
                         if resultado_qa and resultado_qa.get('answer') and resultado_qa['answer'].strip():
                             score = resultado_qa.get('score', 0)
-                            if score > 0.5:  # Solo incluir respuestas con buena confianza
+                            if score > 0.4:  # Umbral para capturar respuestas relevantes
                                 fragmentos_procesados.append((score, resultado_qa['answer']))
                     except Exception as e:
                         logger.error(f"Error en QA pipeline para fragmento: {e}")
 
                 if fragmentos_procesados:
-                    # Ordenar por score y tomar la mejor respuesta
                     fragmentos_procesados.sort(reverse=True)
                     mejor_respuesta = fragmentos_procesados[0][1]
                     logger.info(f"Mejor respuesta RAG: {mejor_respuesta}")
                     return mejor_respuesta
-
-        # --- PASO 4: Generación directa con T5 ---
+        
+        # --- PASO 6: Generación directa con T5 ---
         try:
+            # Mejorar el prompt para preguntas sobre procedimientos y reglamento
             prompt = f"""Pregunta: {pregunta_texto}
-Contexto: Esta es una pregunta sobre nómina y recursos humanos.
-Instrucciones: Genera una respuesta clara y concisa. Si no tienes información específica, indica que necesitas más detalles.
+Contexto: Esta es una pregunta sobre procedimientos de nómina o reglamento interno de la Universidad Icesi. 
+Instrucciones: Genera una respuesta clara y concisa basada en la normativa y procedimientos de la empresa. 
+Si la información no está disponible en los documentos, indica que necesitas más detalles o que la información no está especificada.
 Respuesta:"""
             
             respuesta_t5 = self._generar_respuesta_t5(prompt)
             
-            # Limpiar la respuesta de posibles artefactos
-            respuesta_t5 = respuesta_t5.replace("Instrucciones:", "").replace("Respuesta:", "").strip()
-            
-            # Verificar que la respuesta sea válida
-            if respuesta_t5 and len(respuesta_t5) > 10 and not self._es_respuesta_invalida(pregunta_texto, respuesta_t5):
+            if respuesta_t5 and len(respuesta_t5) > 10:
                 logger.info(f"Respuesta generada por T5: {respuesta_t5}")
                 return respuesta_t5
                 
@@ -478,6 +522,63 @@ Respuesta:"""
 
         logger.warning(f"No se encontró respuesta adecuada para: \"{pregunta_texto}\"")
         return respuesta_final
+
+    async def cargar_documentos(self, container: ui.element = None):
+        if self.documentos_cargados:
+            logger.info("Los documentos ya están cargados. No se realizará una nueva carga.")
+            return True
+
+        logger.info("Iniciando carga de documentos...")
+        self.loading = True
+        
+        progress_bar = None
+        progress_label = None
+        progress_container_outer = None
+
+        if container:
+            with container:
+                progress_container_outer = ui.column().classes('w-full items-center mt-4 gap-1')
+                with progress_container_outer:
+                    progress_label = ui.label('Cargando 0%').classes('text-sm font-medium text-gray-700')
+                    progress_bar = ui.linear_progress(value=0, show_value=False).props('size=20px rounded color=primary')
+                    progress_bar.classes('w-2/4')
+
+        try:
+            # Cargar documentos de SharePoint
+            success = await self._cargar_documentos_sharepoint(progress_bar, progress_label)
+            
+            if success:
+                if container:
+                    progress_label.set_text('Cargando modelos...')
+                    progress_bar.set_value(0.5)
+                
+                # Cargar modelos después de los documentos
+                modelos_cargados = await self.cargar_modelos()
+                
+                if modelos_cargados:
+                    if container:
+                        ui.notify("✅ Documentos y modelos cargados correctamente", type="positive")
+                    self.documentos_cargados = True
+                else:
+                    if container:
+                        ui.notify("⚠️ Documentos cargados pero hubo problemas con los modelos", type="warning")
+                    self.documentos_cargados = True  # Aún así marcamos documentos como cargados
+            else:
+                if container:
+                    ui.notify("❌ Error al cargar documentos", type="negative")
+            return success
+            
+        except Exception as e:
+            logger.error(f"Error al cargar documentos: {str(e)}")
+            if container:
+                ui.notify(f"❌ Error al cargar documentos: {str(e)}", type="negative")
+            return False
+        finally:
+            self.loading = False
+            if progress_bar and progress_label and container:
+                progress_container_outer.clear() 
+                progress_bar.set_value(1.0)
+                progress_label.set_text("Carga completa!")
 
     def _cargar_qa_pipeline(self):
         try:
@@ -562,50 +663,8 @@ Respuesta:"""
         ui.run_javascript(f"navigator.clipboard.writeText('{texto}')")
         ui.notify("✓ Código copiado", type="positive", timeout=1000)
 
-    async def cargar_documentos(self, container: ui.element = None):
-        if self.documentos_cargados:
-            logger.info("Los documentos ya están cargados. No se realizará una nueva carga.")
-            return True
-
-        logger.info("Iniciando carga de documentos...")
-        self.loading = True
-        
-        progress_bar = None
-        progress_label = None
-        progress_container_outer = None
-
-        if container:
-            with container:
-                progress_container_outer = ui.column().classes('w-full items-center mt-4 gap-1')
-                with progress_container_outer:
-                    progress_label = ui.label('Cargando 0%').classes('text-sm font-medium text-gray-700')
-                    progress_bar = ui.linear_progress(value=0, show_value=False).props('size=20px rounded color=primary')
-                    progress_bar.classes('w-2/4')
-
-        try:
-            success = await self._cargar_documentos_sharepoint(progress_bar, progress_label) 
-            
-            if success:
-                if container:
-                    ui.notify("✅ Documentos cargados correctamente", type="positive")
-                self.documentos_cargados = True
-            else:
-                if container:
-                    ui.notify("❌ Error al cargar documentos", type="negative")
-            return success
-        except Exception as e:
-            logger.error(f"Error al cargar documentos: {str(e)}")
-            if container:
-                ui.notify(f"❌ Error al cargar documentos: {str(e)}", type="negative")
-            return False
-        finally:
-            self.loading = False
-            if progress_bar and progress_label and container:
-                progress_container_outer.clear() 
-                progress_bar.set_value(1.0)
-                progress_label.set_text("Carga completa!")
-
     async def _cargar_documentos_sharepoint(self, progress_bar: Optional[ui.linear_progress], progress_label: Optional[ui.label]) -> bool:
+        """Carga los documentos desde SharePoint y los procesa."""
         logger.info("Preparando conexión a SharePoint")
         logger.debug(f"Usando token: {self.access_token[:15]}...")
 
@@ -622,6 +681,7 @@ Respuesta:"""
                 archivos_json = response.json().get("value", [])
                 total_archivos = len(archivos_json)
                 logger.info(f"Total de archivos encontrados: {total_archivos}")
+                logger.info(f"Detalle de archivos: {[archivo.get('name', 'Sin nombre') for archivo in archivos_json]}")
                 
                 if total_archivos == 0 and progress_label:
                     progress_label.set_text("No se encontraron archivos en SharePoint.")
@@ -640,13 +700,19 @@ Respuesta:"""
                         progress_label.set_text(f'Cargando {progreso_actual:.0%}')
                 
                 if total_archivos > 0:
+                    logger.info("Iniciando carga de archivos TXT...")
                     self.txt_cache = cargar_archivos_txt_desde_sharepoint(archivos_json)
+                    logger.info(f"Archivos TXT cargados: {len(self.txt_cache)}")
+                    
+                    logger.info("Iniciando carga de documentos Word...")
                     self.word_docs = cargar_documentos_word_desde_sharepoint(archivos_json)
+                    logger.info(f"Documentos Word cargados: {len(self.word_docs)}")
                     
                     if progress_label:
                         progress_label.set_text('Indexando documentos...')
                     
                     # Usar el indexador para procesar los documentos
+                    logger.info("Iniciando indexación de documentos...")
                     await self.indexer.indexar_documentos(self.word_docs)
                     self.documentos_cargados = True
                     logger.info("Documentos indexados correctamente")
@@ -654,7 +720,6 @@ Respuesta:"""
                     if progress_label:
                         progress_label.set_text('Indexación completada')
                     
-                    logger.debug(f"Archivos recibidos de SharePoint: {archivos_json}")
                     logger.info(f"Carga exitosa. TXT: {len(self.txt_cache)}, Word: {len(self.word_docs)}")
                 elif total_archivos == 0:
                     logger.info("No se encontraron archivos para procesar en SharePoint.")
@@ -677,29 +742,6 @@ Respuesta:"""
                  if progress_bar.value < 1.0 and "Error" not in progress_label.text and "No se encontraron" not in progress_label.text:
                      progress_label.set_text("Proceso finalizado.")
 
-        return False
-
-    def _es_respuesta_invalida(self, pregunta: str, respuesta: str) -> bool:
-        """Verifica si una respuesta es inválida basándose en varios criterios."""
-        pregunta = pregunta.lower().strip()
-        respuesta = respuesta.lower().strip()
-        
-        # Si la respuesta es más corta que la pregunta
-        if len(respuesta) < len(pregunta):
-            return True
-            
-        # Si la respuesta contiene la pregunta completa
-        if pregunta in respuesta:
-            return True
-            
-        # Si la respuesta es muy similar a la pregunta (usando similitud de palabras)
-        palabras_pregunta = set(pregunta.split())
-        palabras_respuesta = set(respuesta.split())
-        palabras_comunes = palabras_pregunta.intersection(palabras_respuesta)
-        
-        if len(palabras_comunes) / len(palabras_pregunta) > 0.7:  # Más del 70% de palabras en común
-            return True
-            
         return False
 
     async def main_page(self):
@@ -735,16 +777,32 @@ Respuesta:"""
                 respuesta_bot_texto = ""
                 if pregunta_actual.strip().isdigit() and len(pregunta_actual.strip()) >= 6:
                     self.documento_usuario = pregunta_actual.strip()
+                    logger.info(f"Documento guardado en caché: {self.documento_usuario}")
+                    logger.info(f"Estado del caché TXT: {list(self.txt_cache.keys()) if self.txt_cache else 'Vacío'}")
+                    logger.info(f"Estado del caché Word: {list(self.word_docs.keys()) if self.word_docs else 'Vacío'}")
+                    
+                    # Verificar si el documento existe en los cachés
+                    doc_en_txt = any(self.documento_usuario in str(key) for key in self.txt_cache.keys())
+                    doc_en_word = any(self.documento_usuario in str(key) for key in self.word_docs.keys())
+                    logger.info(f"Documento encontrado en TXT: {doc_en_txt}, en Word: {doc_en_word}")
+                    
                     respuesta_bot_texto = f"Documento ({self.documento_usuario}) registrado. Ahora puedes hacer preguntas sobre tu nómina."
                     logger.info(f"Documento de usuario ({user_id}) registrado: {self.documento_usuario}")
                 else:
                     if not self.documento_usuario:
-                         respuesta_bot_texto = "Por favor, registra tu número de documento primero."
-                         logger.warning(f"Usuario ({user_id}) intentó preguntar sin registrar documento.")
+                        respuesta_bot_texto = "Por favor, registra tu número de documento primero."
+                        logger.warning(f"Usuario ({user_id}) intentó preguntar sin registrar documento.")
                     elif not self.documentos_cargados and not any(kw in pregunta_actual.lower() for kw in ["vacaciones", "normativa", "ley"]):
-                         respuesta_bot_texto = "Los documentos aún se están procesando o no están disponibles. Por favor, espera un momento o intenta con preguntas generales."
-                         logger.warning(f"Usuario ({user_id}) preguntó '{pregunta_actual}' pero los documentos no están listos.")
+                        respuesta_bot_texto = "Los documentos aún se están procesando o no están disponibles. Por favor, espera un momento o intenta con preguntas generales."
+                        logger.warning(f"Usuario ({user_id}) preguntó '{pregunta_actual}' pero los documentos no están listos.")
                     else:
+                        # Verificar estado del caché antes de procesar la pregunta
+                        logger.info(f"Estado del caché antes de procesar pregunta:")
+                        logger.info(f"- Documento usuario: {self.documento_usuario}")
+                        logger.info(f"- Documentos cargados: {self.documentos_cargados}")
+                        logger.info(f"- TXT Cache keys: {list(self.txt_cache.keys()) if self.txt_cache else 'Vacío'}")
+                        logger.info(f"- Word Cache keys: {list(self.word_docs.keys()) if self.word_docs else 'Vacío'}")
+                        
                         respuesta_bot_texto = self._responder_pregunta(pregunta_actual)
                 
                 self.messages.append(("system", avatar_system, respuesta_bot_texto, datetime.now().strftime('%H:%M')))
@@ -843,11 +901,17 @@ Respuesta:"""
         ui.run_javascript('window.scrollTo(0, document.body.scrollHeight)')
 
 if __name__ in {'__main__', '__mp_main__'}:
+    # Configurar multiprocessing para Windows
+    if os.name == 'nt':
+        import multiprocessing
+        multiprocessing.set_start_method('spawn', force=True)
+    
     app_instance = ChatNominaApp()
     ui.page('/')(app_instance.main_page)
     ui.run(
         title='ChatNomina',
         native=True,
         window_size=(450, 750),
-        favicon=None
+        favicon=None,
+        reload=False  # Deshabilitar reload automático
     )
